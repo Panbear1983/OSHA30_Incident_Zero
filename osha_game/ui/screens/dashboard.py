@@ -32,7 +32,7 @@ class DashboardScreen(Screen):
         align: center middle;
     }}
     DashboardScreen > Vertical {{
-        width: 76;
+        width: 86;
         height: auto;
         padding: 1 3;
     }}

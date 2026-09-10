@@ -88,6 +88,9 @@ class StatsScreen(Screen):
             yield Static("EXAM HISTORY", classes="section-header")
             yield Vertical(id="exams-section")
 
+            yield Static("INTERVIEW", classes="section-header")
+            yield Vertical(id="interview-section")
+
             yield Static("esc / b back", id="footer-hint")
 
     def on_mount(self) -> None:
@@ -99,6 +102,7 @@ class StatsScreen(Screen):
         self._populate_category(con, profile_id)
         self._populate_shifts(con, profile_id)
         self._populate_exams(con, profile_id)
+        self._populate_interview(con, profile_id)
 
         body = self.query_one("#stats-body", VerticalScroll)
         body.can_focus = True
@@ -231,6 +235,31 @@ class StatsScreen(Screen):
         correct = row["correct"] or 0
         status = "PASS" if row["passed"] else "FAIL"
         return f"{date:<16}  {correct}/{total}  {status}"
+
+    # -- section 6: interview self-ratings (read-only; written by InterviewScreen) ----------------
+
+    def _populate_interview(self, con, profile_id) -> None:
+        container = self.query_one("#interview-section", Vertical)
+        row = con.execute(
+            "SELECT COUNT(*), AVG(rating) FROM interview_ratings WHERE profile_id=?", (profile_id,)
+        ).fetchone()
+        count, avg = row[0] or 0, row[1]
+        if not count:
+            container.mount(Static("No scenarios rated yet.", classes="stat-line-muted"))
+            return
+        container.mount(Static(
+            f"RATED {count}   AVERAGE {avg:.1f}/3", classes="stat-line"))
+        rows = con.execute(
+            "SELECT r.at, r.rating, s.module_id, s.title FROM interview_ratings r "
+            "LEFT JOIN bank.scenarios s ON s.sid = r.sid WHERE r.profile_id=? "
+            "ORDER BY r.at DESC LIMIT 5",
+            (profile_id,),
+        ).fetchall()
+        for r in rows:
+            date = (r["at"] or "")[:16]
+            mod = f"M{r['module_id']:02d}" if r["module_id"] else "M??"
+            title = (r["title"] or "")[:40]
+            container.mount(Static(f"{date:<16}  {mod}  {title:<40}  {r['rating']}/3", classes="stat-line"))
 
     # -- navigation -------------------------------------------------------------------------------
 
