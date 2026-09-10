@@ -84,6 +84,8 @@ class HomeScreen(Screen):
         Binding("e", "exam", "Exam"),
         Binding("t", "stats", "Stats"),
         Binding("p", "switch_profile", "Switch Profile"),
+        Binding("b", "back_to_dashboard", "Dashboard"),
+        Binding("escape", "back_to_dashboard", "Dashboard", show=False),
         Binding("q", "quit_app", "Quit"),
     ]
 
@@ -99,7 +101,7 @@ class HomeScreen(Screen):
             yield Static("", id="unlocked-line")
             yield Static(
                 "[s] Start Shift   [m] Plant Map   [e] Exam   [t] Stats   "
-                "[p] Switch Profile   [q] Quit",
+                "[b] Dashboard   [p] Switch Profile   [q] Quit",
                 id="footer",
             )
 
@@ -170,6 +172,9 @@ class HomeScreen(Screen):
         self.app.state.profile_name = None
         self.app.state.active_shift = None
         self.app.state.active_exam = None
+
+    def action_back_to_dashboard(self) -> None:
+        self.app.pop_screen()
 
     def action_quit_app(self) -> None:
         self.app.action_quit_app()

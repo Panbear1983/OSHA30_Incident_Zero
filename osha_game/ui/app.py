@@ -13,7 +13,11 @@ from .. import db, config
 _SCREEN_MODULES = {
     "roster": ("osha_game.ui.screens.roster", "RosterScreen"),
     "splash": ("osha_game.ui.screens.splash", "SplashScreen"),
+    "dashboard": ("osha_game.ui.screens.dashboard", "DashboardScreen"),
     "home": ("osha_game.ui.screens.home", "HomeScreen"),
+    "lookup": ("osha_game.ui.screens.lookup", "LookupScreen"),
+    "inspect": ("osha_game.ui.screens.inspect", "InspectScreen"),
+    "interview": ("osha_game.ui.screens.interview", "InterviewScreen"),
     "plantmap": ("osha_game.ui.screens.plantmap", "PlantMapScreen"),
     "shift": ("osha_game.ui.screens.shift", "ShiftScreen"),
     "debrief": ("osha_game.ui.screens.debrief", "DebriefScreen"),
@@ -43,7 +47,7 @@ class GameState:
 class InspectorApp(App):
     CSS_PATH = "styles.tcss"
     TITLE = "INCIDENT ZERO"
-    SUB_TITLE = "Plant Safety Inspector"
+    SUB_TITLE = "OSHA 30 dashboard"
     BINDINGS = [("ctrl+q", "quit_app", "Quit")]
 
     def __init__(self):

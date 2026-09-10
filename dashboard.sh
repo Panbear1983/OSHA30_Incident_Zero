@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# INCIDENT ZERO — OSHA 30 study game.
+# INCIDENT ZERO — OSHA 30 dashboard: Train / Look Up / Inspect / Interview.
 # Space-safe launcher (this folder's name contains a space and a trailing period).
 set -Eeuo pipefail
 
@@ -9,10 +9,11 @@ PYTHON_BIN="${OSHA30_PYTHON:-python3}"
 
 usage() {
   cat <<'USAGE'
-INCIDENT ZERO — OSHA 30 study game
+INCIDENT ZERO — OSHA 30 dashboard
 
-  ./dashboard.sh                 play
-  ./dashboard.sh build           extract PDFs + build the question bank
+  ./dashboard.sh                 open the dashboard (Train / Look Up / Inspect / Interview)
+  ./dashboard.sh lookup WORDS    find a rule, number, standard, or term (+ page) from the terminal
+  ./dashboard.sh build           extract PDFs + build the question bank and fact base
   ./dashboard.sh ai [--backend ollama|agy] [--module N] [--force]
                                  add AI scenario questions (build-time only)
   ./dashboard.sh reset NAME      wipe one profile (asks for confirmation)
@@ -49,6 +50,7 @@ cmd="${1:-run}"
 case "$cmd" in
   run)            exec "$VENV/bin/python" -m osha_game run "$@" ;;
   build)          exec "$VENV/bin/python" -m osha_game build "$@" ;;
+  lookup|find)    exec "$VENV/bin/python" -m osha_game lookup "$@" ;;
   ai)             exec "$VENV/bin/python" -m osha_game ai "$@" ;;
   reset)          exec "$VENV/bin/python" -m osha_game reset "$@" ;;
   status|doctor)  exec "$VENV/bin/python" -m osha_game status "$@" ;;

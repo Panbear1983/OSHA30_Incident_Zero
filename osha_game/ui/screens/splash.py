@@ -1,5 +1,5 @@
 """SplashScreen -- the brief "clocking in" animation shown right after a profile is picked
-in RosterScreen, before HomeScreen. Pure presentation: no DB access, no game state changes."""
+in RosterScreen, before DashboardScreen (the four doors). Pure presentation: no DB access, no game state changes."""
 import pyfiglet
 from textual.app import ComposeResult
 from textual.containers import Vertical
@@ -94,4 +94,4 @@ class SplashScreen(Screen):
             return
         self._advanced = True
         self.app.pop_screen()
-        self.app.show("home")
+        self.app.show("dashboard")

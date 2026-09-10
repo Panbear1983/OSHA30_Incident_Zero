@@ -46,25 +46,26 @@ class Fact:
 # here first. Train's builders are deliberately left on the old path (unchanged bank).
 
 _HEADING_END = re.compile(r"[.!?:;,]\s*$")
+_PAREN_SPLIT = re.compile(r"(?<=[.!?]\))\s+(?=[A-Z0-9\"(])")   # "...methods.) Some ..."
 _WORD = re.compile(r"[A-Za-z][A-Za-z'\-]*")
 _RULE_WORDS = re.compile(r"\b(must|shall)\b", re.I)
 
 
 def _is_heading(line: str) -> bool:
     s = line.strip()
-    if not s or len(s) > 70 or _HEADING_END.search(s):
+    if not s or len(s) > 80 or _HEADING_END.search(s):
         return False
-    if s.startswith(("•", "", "-", "·")):
+    if s.startswith(("\u2022", "\uf0b7", "-", "\u00b7")):   # bullets (incl. Wingdings) never head
         return False
     words = _WORD.findall(s)
-    if not (1 <= len(words) <= 8):
+    if not (1 <= len(words) <= 10):
         return False
     caps = sum(1 for w in words if w[0].isupper())
     return caps / len(words) >= 0.6
 
 
 def clean_sentences(pages: list[str], p_start: int, p_end: int,
-                    min_len: int = 40, max_len: int = 260) -> list[tuple[str, int]]:
+                    min_len: int = 40, max_len: int = 260, prose: bool = True) -> list[tuple[str, int]]:
     """(sentence, page) pairs with heading lines removed before joining. Sentences that span
     a page break are dropped on purpose so page attribution stays exact."""
     out: list[tuple[str, int]] = []
@@ -72,10 +73,13 @@ def clean_sentences(pages: list[str], p_start: int, p_end: int,
         body = strip_boilerplate(pages[pno - 1])
         kept = [ln for ln in body.splitlines() if not _is_heading(ln)]
         text = normalize("\n".join(kept))
-        for s in mine._SENT_SPLIT.split(text):
+        for s in (b for a in mine._SENT_SPLIT.split(text) for b in _PAREN_SPLIT.split(a)):
             s = s.strip()
-            if min_len <= len(s) <= max_len and re.search(r"[A-Za-z]{3}", s) and mine._looks_like_prose(s):
-                out.append((s, pno))
+            if not (min_len <= len(s) <= max_len) or not re.search(r"[A-Za-z]{3}", s):
+                continue
+            if prose and not mine._looks_like_prose(s):
+                continue
+            out.append((s, pno))
     return out
 
 
@@ -119,19 +123,26 @@ def _numbers(ctx) -> list[Fact]:
 
 
 def _cfrs(ctx) -> list[Fact]:
+    """Every clean sentence in the body that names a CFR cite. (Not ctx.cfr_cites: that list
+    comes from the line-joined miner and carries glued headings; facts are shown verbatim.)"""
     out: list[Fact] = []
     seen: set[tuple[str, str]] = set()
-    for cite, sentence, page in ctx.cfr_cites:
-        key = (cite, sentence)
-        if key in seen:
-            continue
-        seen.add(key)
-        mod = ctx.module_of(page)
-        les = ctx.lesson_of(page)
-        out.append(Fact(
-            kind="cfr", subject=f"29 CFR {cite}", value=sentence, quote=sentence, page=page,
-            module_id=mod.id if mod else None, lesson_id=les.id if les else None, cfr=cite,
-        ))
+    for mod in ctx.modules:
+        for les in mod.lessons:
+            for sentence, page in clean_sentences(ctx.guide_pages, les.page_start, les.page_end,
+                                                  min_len=20, max_len=300, prose=False):
+                m = mine.CFR.search(sentence)
+                if not m:
+                    continue
+                cite = m.group(1)
+                key = (cite, sentence)
+                if key in seen:
+                    continue
+                seen.add(key)
+                out.append(Fact(
+                    kind="cfr", subject=f"29 CFR {cite}", value=sentence, quote=sentence,
+                    page=page, module_id=mod.id, lesson_id=les.id, cfr=cite,
+                ))
     return out
 
 
