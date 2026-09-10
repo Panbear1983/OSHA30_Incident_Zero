@@ -1,6 +1,8 @@
 """Phase 3 checks: every module has an ordered checklist grounded on its cited pages,
 the Word (+ PDF) export works, and the Inspect screen ticks and unticks for real."""
 import json
+
+import pytest
 import pathlib
 
 from textual.widgets import OptionList
@@ -22,6 +24,8 @@ def test_every_module_has_a_contiguous_checklist(bank_con):
 
 
 def test_every_item_is_on_its_cited_page(bank_con):
+    if not paths.PAGES_GUIDE.exists():
+        pytest.skip("page cache absent (needs the source PDF + ./dashboard.sh build)")
     pages = {}
     with open(paths.PAGES_GUIDE) as fh:
         for line in fh:

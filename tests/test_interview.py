@@ -3,6 +3,8 @@ cited page, the Ollama grounding verifier rejects invented facts (no Ollama need
 headless Pilot playthrough of the Interview screen writes exactly one self-rating."""
 import json
 
+import pytest
+
 from textual.widgets import OptionList, Static
 
 from conftest import run, text_of
@@ -30,6 +32,8 @@ def test_one_deterministic_scenario_per_lesson(bank_con):
 
 
 def test_every_answer_line_is_on_its_page(bank_con):
+    if not (paths.PAGES_GUIDE.exists() and paths.PAGES_SDS.exists()):
+        pytest.skip("page cache absent (needs the source PDFs + ./dashboard.sh build)")
     guide = load_pages(paths.PAGES_GUIDE)
     sds = load_pages(paths.PAGES_SDS)
     page_cache = {("guide", i): loose(t) for i, t in enumerate(guide, start=1)}
@@ -53,13 +57,18 @@ def test_grounding_verifier_without_ollama():
     cites = ["1910.29"]
     good = (
         "You are walking the mezzanine when you notice the guardrail system along the open "
-        "edge looks low. A worker mentions the top rail was rebuilt last week and nobody "
-        "measured it against the 42 inches the guide requires. The area supervisor points "
-        "to 29 CFR 1910.29 and asks whether the crew can keep working near the edge today. "
-        "What applies here, and what do you do first, second, and third?"
+        "edge looks low. A worker mentions the top rail was rebuilt last week; your tape "
+        "reads 42 inches at one post and less at the next. The area supervisor holds up a "
+        "printout headed 29 CFR 1910.29 and asks whether the crew can keep working near the "
+        "edge today. What applies here, and what do you do first, second, and third?"
     )
     ok, why = llm_gen.verify(good, subjects, cites)
     assert ok, why
+
+    # a narrative that asserts what the rule says is rejected even when every fact is real
+    asserting = good.replace("your tape reads 42 inches", "the guide requires 42 inches")
+    ok, why = llm_gen.verify(asserting, subjects, cites)
+    assert not ok and "asserts a rule" in why
 
     bad_number = good.replace("42 inches", "39 inches")
     ok, why = llm_gen.verify(bad_number, subjects, cites)

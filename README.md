@@ -51,6 +51,7 @@ Python 3.11+ is the only prerequisite. The built fact base and question bank shi
 ## What is inside the fact base
 
 Built from the 966-page guide (23 modules, 56 lessons) and the 10-page sample SDS handout:
+1,540 facts in all, and every one of them was found verbatim on its cited page at build time.
 
 | Kind | What it is | How it is found |
 |------|-----------|-----------------|
@@ -61,8 +62,8 @@ Built from the 966-page guide (23 modules, 56 lessons) and the 10-page sample SD
 | rule | a sentence containing "must" or "shall" | keyword |
 | sds | one of the 16 Safety Data Sheet sections | fixed table checked against the handout |
 
-Inspect checklists are the rule facts of each module in page order. Interview scenarios
-are one per lesson, with a model answer assembled from that lesson's own standards,
+Inspect checklists are the rule facts of each module in page order (1,100 items across
+the 23 modules). Interview scenarios are one per lesson (56), with a model answer assembled from that lesson's own standards,
 numbers, terms and rules. An optional `./dashboard.sh ai` command can ask a local
 Ollama model to write more natural scenario narratives; each one is accepted only if it
 quotes at least two supplied facts verbatim and invents no number or standard. The

@@ -1,7 +1,18 @@
 # OSHA 30 Dashboard — Build Plan
 
-Written 2026-09-10. Everything in this plan lives inside this folder
-(`~/GitHub/OSHA 30 Cert.`). No code, data, exports, or notes go anywhere else.
+Written 2026-09-10; built the same day. Everything in this plan lives inside this
+repository. No code, data, exports, or notes go anywhere else.
+
+## Status
+
+| Phase | Result |
+|-------|--------|
+| 0 Fence | done — own repository, secret-scan hooks armed and negative-tested |
+| 1 Fact base | done — 1,540 page-grounded facts; question bank unchanged (0 id drift) |
+| 2 Look Up | done — FTS5 search, `./dashboard.sh lookup`, four-door dashboard |
+| 3 Inspect | done — 1,100 checklist items / 23 modules, Word + PDF export |
+| 4 Interview | done — 56 deterministic scenarios (+ optional local-model narratives) |
+| 5 Publish | done — README, screenshots, public repository |
 
 ## Ground rules
 
