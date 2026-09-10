@@ -1,0 +1,20 @@
+/* App-wide base styles only. Screens define their own layout/color rules via a class-level
+   DEFAULT_CSS string -- do not add screen-specific rules here, to avoid every screen editing
+   the same shared file. */
+
+Screen {
+    background: #0d1117;
+    color: #c9d1d9;
+}
+
+.hit-flash {
+    background: #2ea043 30%;
+}
+
+.miss-flash {
+    background: #da3633 30%;
+}
+
+.bet-armed {
+    border: heavy #e3b341;
+}

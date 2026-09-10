@@ -1,0 +1,38 @@
+# --- Python ---
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# --- Source PDFs: copyrighted training material + the personal certificate.
+# The built question bank (data/bank.db) ships instead; the game never needs the PDFs to play.
+*.pdf
+
+# --- Personal / rebuildable data ---
+data/progress.db
+data/progress.db-*
+data/*.db-wal
+data/*.db-shm
+data/*.db.new
+data/cache/
+exports/
+
+# --- Earlier hand-built prototype from a different session (kept locally, not published:
+#     it hardcodes an absolute local path). cards_data.json IS kept -- the importer reads it.
+build_game.py
+osha_flashcard_game.html
+osha_quiz_cli.py
+
+# --- Secrets, never ---
+.env
+*.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials/
+auth-profiles.json
+
+# --- OS ---
+.DS_Store

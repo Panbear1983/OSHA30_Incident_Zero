@@ -1,0 +1,5 @@
+textual>=7.5,<8
+rich>=14.3
+pyfiglet>=1.0.4
+fsrs>=6.0,<7
+pymupdf>=1.27

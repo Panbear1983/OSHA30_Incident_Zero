@@ -1,0 +1,21 @@
+# INCIDENT ZERO configuration — every key is optional; defaults live in code.
+
+[ollama]
+model = "auto"                 # or an exact tag, e.g. "qwen3:8b"
+url = "http://localhost:11434"
+per_lesson = 3
+temperature = 0.7
+
+[agy]
+model = ""                     # empty = agy's own default model
+per_lesson = 3
+
+[game]
+shift_size = 15
+exam_questions = 30
+exam_seconds = 1800
+exam_pass_pct = 70
+
+[ui]
+animations = true              # master kill switch for all effects
+fps = 10
