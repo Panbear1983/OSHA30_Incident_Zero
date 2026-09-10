@@ -146,8 +146,17 @@ def cmd_lookup(argv: list[str]) -> int:
 
 
 def cmd_ai(argv: list[str]) -> int:
-    print("AI scenario generation isn't built yet (Phase 5).")
-    return 0
+    """./dashboard.sh ai [--module N] [--force]  -- optional Ollama-written interview
+    scenarios (build-time only; the dashboard never needs Ollama running to play)."""
+    from .content import llm_gen
+    return llm_gen.main(argv)
+
+
+def cmd_export(argv: list[str]) -> int:
+    """./dashboard.sh export [--module N | --all] [--no-pdf]  -- write Inspect checklists
+    as Word (+ PDF via LibreOffice when available) into exports/."""
+    from .export import checklist as export_checklist
+    return export_checklist.main(argv)
 
 
 def cmd_reset(argv: list[str]) -> int:
@@ -157,7 +166,7 @@ def cmd_reset(argv: list[str]) -> int:
 
 COMMANDS = {
     "build": cmd_build, "status": cmd_status, "run": cmd_run, "ai": cmd_ai,
-    "reset": cmd_reset, "lookup": cmd_lookup,
+    "reset": cmd_reset, "lookup": cmd_lookup, "export": cmd_export,
 }
 
 

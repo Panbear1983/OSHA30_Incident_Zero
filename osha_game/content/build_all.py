@@ -5,6 +5,7 @@ swapped in at the end) — no builder module ever opens a database connection it
 """
 import json
 from . import build_mc, build_blank, importer, validate, facts as factsmod
+from . import checklist as checklistmod, scenarios as scenariosmod
 from .context import build_context
 from .. import db as dbmod
 from .. import paths
@@ -79,6 +80,9 @@ def rebuild():
 
     report = validate.validate_all(con, all_qs, insert=True)
     fact_counts = insert_facts(con, factsmod.build(ctx))
+    derived_counts = {}
+    derived_counts.update(checklistmod.build_and_insert(con, ctx))
+    derived_counts.update(scenariosmod.build_and_insert(con, ctx))
     con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('modules', ?)", (str(len(ctx.modules)),))
     con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('lessons', ?)", (str(len(ctx.lessons)),))
     con.commit()
@@ -88,9 +92,11 @@ def rebuild():
 
     generated_counts = {k: len(v) for k, v in groups.items()}
     report.facts = fact_counts
+    report.derived = derived_counts
     paths.BUILD_REPORT.write_text(json.dumps({
         "generated_counts": generated_counts,
         "facts": fact_counts,
+        "derived": derived_counts,
         "accepted": report.accepted,
         "rejected": report.rejected,
         "warnings": report.warnings,
@@ -124,4 +130,7 @@ def print_report(report, generated_counts) -> None:
         shown = {k: v for k, v in facts.items() if k != "rejected"}
         console.print(f"facts: {sum(shown.values())} accepted {dict(sorted(shown.items()))}  "
                       f"rejected [red]{facts.get('rejected', 0)}[/red]")
+    derived = getattr(report, "derived", None)
+    if derived:
+        console.print(f"derived: {dict(sorted(derived.items()))}")
     console.print(f"wrote {paths.BANK_DB}")

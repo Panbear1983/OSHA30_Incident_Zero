@@ -14,8 +14,10 @@ INCIDENT ZERO — OSHA 30 dashboard
   ./dashboard.sh                 open the dashboard (Train / Look Up / Inspect / Interview)
   ./dashboard.sh lookup WORDS    find a rule, number, standard, or term (+ page) from the terminal
   ./dashboard.sh build           extract PDFs + build the question bank and fact base
-  ./dashboard.sh ai [--backend ollama|agy] [--module N] [--force]
-                                 add AI scenario questions (build-time only)
+  ./dashboard.sh export [--module N | --all] [--no-pdf]
+                                 write Inspect checklists to exports/ as Word (+ PDF)
+  ./dashboard.sh ai [--module N] [--force]
+                                 optional: Ollama-written interview scenarios (build-time only)
   ./dashboard.sh reset NAME      wipe one profile (asks for confirmation)
   ./dashboard.sh status          health check: venv, banks, profiles, Ollama
 USAGE
@@ -51,6 +53,7 @@ case "$cmd" in
   run)            exec "$VENV/bin/python" -m osha_game run "$@" ;;
   build)          exec "$VENV/bin/python" -m osha_game build "$@" ;;
   lookup|find)    exec "$VENV/bin/python" -m osha_game lookup "$@" ;;
+  export)         exec "$VENV/bin/python" -m osha_game export "$@" ;;
   ai)             exec "$VENV/bin/python" -m osha_game ai "$@" ;;
   reset)          exec "$VENV/bin/python" -m osha_game reset "$@" ;;
   status|doctor)  exec "$VENV/bin/python" -m osha_game status "$@" ;;
