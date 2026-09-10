@@ -36,6 +36,45 @@ CREATE TABLE IF NOT EXISTS questions(
   origin TEXT NOT NULL CHECK(origin IN ('deterministic','ollama','gemini','imported')));
 CREATE INDEX IF NOT EXISTS idx_q_module ON questions(module_id);
 CREATE INDEX IF NOT EXISTS idx_q_cat ON questions(category);
+-- Shared fact base (Look Up / Inspect / Interview all read this; none of them mine the PDF).
+CREATE TABLE IF NOT EXISTS facts(
+  fid TEXT PRIMARY KEY,
+  kind TEXT NOT NULL CHECK(kind IN ('term','threshold','deadline','cfr','rule','sds')),
+  subject TEXT NOT NULL,
+  value TEXT NOT NULL,
+  quote TEXT NOT NULL,
+  page INTEGER NOT NULL,
+  module_id INTEGER REFERENCES modules(id),
+  lesson_id INTEGER REFERENCES lessons(id),
+  cfr TEXT,
+  number REAL,
+  unit TEXT,
+  source_doc TEXT NOT NULL DEFAULT 'guide' CHECK(source_doc IN ('guide','sds')));
+CREATE INDEX IF NOT EXISTS idx_f_kind ON facts(kind);
+CREATE INDEX IF NOT EXISTS idx_f_module ON facts(module_id);
+CREATE VIRTUAL TABLE IF NOT EXISTS facts_fts USING fts5(
+  subject, value, quote, fid UNINDEXED, tokenize='porter unicode61');
+-- Inspect: one ordered checklist per module, built from 'rule' facts at build time.
+CREATE TABLE IF NOT EXISTS checklist_items(
+  cid TEXT PRIMARY KEY,
+  module_id INTEGER NOT NULL REFERENCES modules(id),
+  lesson_id INTEGER REFERENCES lessons(id),
+  seq INTEGER NOT NULL,
+  text TEXT NOT NULL,
+  page INTEGER NOT NULL,
+  cfr TEXT,
+  fid TEXT REFERENCES facts(fid));
+CREATE INDEX IF NOT EXISTS idx_c_module ON checklist_items(module_id, seq);
+-- Interview: one scenario per lesson with a model answer assembled from facts.
+CREATE TABLE IF NOT EXISTS scenarios(
+  sid TEXT PRIMARY KEY,
+  module_id INTEGER NOT NULL REFERENCES modules(id),
+  lesson_id INTEGER REFERENCES lessons(id),
+  title TEXT NOT NULL,
+  prompt TEXT NOT NULL,
+  answer_json TEXT NOT NULL,
+  origin TEXT NOT NULL DEFAULT 'deterministic' CHECK(origin IN ('deterministic','ollama')));
+CREATE INDEX IF NOT EXISTS idx_s_module ON scenarios(module_id);
 """
 
 PROGRESS_DDL = """
@@ -80,6 +119,19 @@ CREATE TABLE IF NOT EXISTS exams(
   at TEXT NOT NULL, duration_s INTEGER,
   total INTEGER, correct INTEGER, passed INTEGER NOT NULL,
   detail TEXT);
+-- Inspect ticks and Interview self-ratings live here (per profile), never in bank.db.
+CREATE TABLE IF NOT EXISTS checklist_ticks(
+  profile_id INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  cid TEXT NOT NULL,
+  ticked_at TEXT NOT NULL,
+  PRIMARY KEY(profile_id, cid));
+CREATE TABLE IF NOT EXISTS interview_ratings(
+  id INTEGER PRIMARY KEY,
+  profile_id INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  sid TEXT NOT NULL,
+  rating INTEGER NOT NULL CHECK(rating IN (1,2,3)),
+  at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_ir_profile ON interview_ratings(profile_id, at);
 """
 
 

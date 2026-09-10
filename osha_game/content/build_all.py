@@ -4,7 +4,7 @@ This is the one place that owns write access to bank.db (well, bank.db.new, atom
 swapped in at the end) — no builder module ever opens a database connection itself.
 """
 import json
-from . import build_mc, build_blank, importer, validate
+from . import build_mc, build_blank, importer, validate, facts as factsmod
 from .context import build_context
 from .. import db as dbmod
 from .. import paths
@@ -23,6 +23,39 @@ def _insert_modules_lessons(con, ctx) -> None:
             "VALUES (?,?,?,?,?)",
             (les.id, les.module_id, les.label, les.page_start, les.page_end),
         )
+
+
+def insert_facts(con, all_facts) -> dict:
+    """Grounding-checked insert of the fact base: a fact whose quote is not literally on the
+    page it cites is dropped, exactly like a question would be. Returns counts per kind
+    plus 'rejected'."""
+    from .norm import loose
+    page_cache = validate._page_text_cache()
+    counts: dict[str, int] = {"rejected": 0}
+    seen: set[str] = set()
+    for f in all_facts:
+        page_text = page_cache.get((f.source_doc, f.page), "")
+        needle = loose(f.quote)[:400]
+        if not page_text or needle not in page_text:
+            counts["rejected"] += 1
+            continue
+        fid = f.fid
+        if fid in seen:
+            counts["rejected"] += 1
+            continue
+        seen.add(fid)
+        con.execute(
+            "INSERT INTO facts (fid, kind, subject, value, quote, page, module_id, lesson_id, "
+            " cfr, number, unit, source_doc) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            (fid, f.kind, f.subject, f.value, f.quote, f.page, f.module_id, f.lesson_id,
+             f.cfr, f.number, f.unit, f.source_doc),
+        )
+        con.execute(
+            "INSERT INTO facts_fts (subject, value, quote, fid) VALUES (?,?,?,?)",
+            (f.subject, f.value, f.quote, fid),
+        )
+        counts[f.kind] = counts.get(f.kind, 0) + 1
+    return counts
 
 
 def rebuild():
@@ -45,6 +78,7 @@ def rebuild():
     all_qs = [q for qs in groups.values() for q in qs]
 
     report = validate.validate_all(con, all_qs, insert=True)
+    fact_counts = insert_facts(con, factsmod.build(ctx))
     con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('modules', ?)", (str(len(ctx.modules)),))
     con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('lessons', ?)", (str(len(ctx.lessons)),))
     con.commit()
@@ -53,8 +87,10 @@ def rebuild():
     tmp_path.replace(paths.BANK_DB)
 
     generated_counts = {k: len(v) for k, v in groups.items()}
+    report.facts = fact_counts
     paths.BUILD_REPORT.write_text(json.dumps({
         "generated_counts": generated_counts,
+        "facts": fact_counts,
         "accepted": report.accepted,
         "rejected": report.rejected,
         "warnings": report.warnings,
@@ -83,4 +119,9 @@ def print_report(report, generated_counts) -> None:
     )
     if report.reasons:
         console.print("reject reasons:", dict(sorted(report.reasons.items(), key=lambda x: -x[1])))
+    facts = getattr(report, "facts", None)
+    if facts:
+        shown = {k: v for k, v in facts.items() if k != "rejected"}
+        console.print(f"facts: {sum(shown.values())} accepted {dict(sorted(shown.items()))}  "
+                      f"rejected [red]{facts.get('rejected', 0)}[/red]")
     console.print(f"wrote {paths.BANK_DB}")

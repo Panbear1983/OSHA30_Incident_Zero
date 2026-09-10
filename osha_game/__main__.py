@@ -28,6 +28,14 @@ def cmd_status(argv: list[str]) -> int:
         print(f"  bank.db:     {total} questions")
         for r in rows:
             print(f"    {r['origin']:<13} {r['category']:<14} {r[2]}")
+        has_facts = con.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='facts'").fetchone()
+        if has_facts:
+            frows = con.execute("SELECT kind, COUNT(*) FROM facts GROUP BY kind ORDER BY kind").fetchall()
+            ftotal = con.execute("SELECT COUNT(*) FROM facts").fetchone()[0]
+            print(f"  facts:       {ftotal}  " + "  ".join(f"{r[0]}={r[1]}" for r in frows))
+        else:
+            print("  facts:       none -- bank predates the fact base, run: ./dashboard.sh build")
         con.close()
     else:
         print("  bank.db:     not built yet -- run: ./dashboard.sh build")
