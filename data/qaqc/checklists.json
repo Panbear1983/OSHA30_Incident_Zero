@@ -1,0 +1,126 @@
+[
+  {"key": "cable_pull", "module": 4, "title": "Cable pull inspection",
+   "intro": "Walk this list before, during and after every cable pull (power, fiber or data). Record results on the cable pull log. The project spec and the cable manufacturer's data override any generic number here.",
+   "sections": [
+     {"name": "Before the pull", "items": [
+       {"text": "Cable ID, type, size and voltage rating match the cable schedule and the current drawing revision.", "source": "southwire_guide", "quote": "Correct size and type"},
+       {"text": "Reel passed receiving inspection; reel and lot number written on the pull log.", "source": "southwire_guide", "quote": "Check reels for: a. Damage"},
+       {"text": "Pull plan reviewed: maximum tension, sidewall pressure and bend radius checked for every bend; the lowest limit wins.", "source": "southwire_guide", "quote": "the cable does not exceed maximum sidewall pressure; minimum bending radii and maximum pulling tensions"},
+       {"text": "Pulling device rated for the pull: pulling eye at or below its rating (10,000 lb max), basket grip about 1,000 lb max.", "source": "southwire_guide", "quote": "Do not exceed the allowable tension stated by the manufacturer of the pulling eye or 10,000 pounds, whichever is less."},
+       {"text": "Route walked: conduit or tray clean and continuous, supports in place, fill within NEC 392 and design limits.", "source": "hre_nec392", "quote": "Cables 4/0 AWG and larger: The sum of the cable diameters can't exceed the tray width"},
+       {"text": "Pulling lubricant is UL/CSA listed, compatible with the jacket, and contains no waxes or greases.", "source": "southwire_guide", "quote": "The lubricant should contain no waxes or greases."},
+       {"text": "Cold weather: cable kept in heated storage at least 24 hours before installation if required.", "source": "southwire_guide", "quote": "they should be kept in heated storage for at least 24 hours before installation"},
+       {"text": "Copper data cable: pull tension at or below 25 lbf (110 N); bend radius at least 4 x OD (8 x OD shielded).", "source": "c3_install", "quote": "ANSI/TIA-568.2-D limits 4-pair copper cable to 25 pounds-force, or 110 newtons."},
+       {"text": "Fiber: pulled only by the strength members through a swivel; bend radius at least 20 x OD under tension.", "source": "foa_installcbl", "quote": "Swivel pulling eyes should be used to attach the pulling rope or tape to the cable to prevent cable twisting during the pull."}
+     ]},
+     {"name": "During the pull", "items": [
+       {"text": "Cable pays off the reel in one continuous arc with no reverse bends; sheaves sized for the minimum bend radius.", "source": "southwire_guide", "quote": "so that its curvature is continuous with no reversed bends"},
+       {"text": "Tension measured (dynamometer or puller readout) and kept below the calculated limit.", "source": "southwire_guide", "quote": "Calculate pulling tension (T) and sidewall pressure (SP) for each segment."},
+       {"text": "No kinks, twists or dragging over sharp edges; jacket watched as it leaves the reel.", "source": "foa_installcbl", "quote": "Particular care should be taken during installation to prevent kinking the cable"},
+       {"text": "Power and data kept at least 12 in apart; where they must meet, they cross at 90 degrees.", "source": "c3_install", "quote": "ANSI/TIA-569-D specifies a minimum of 12 inches, roughly 300 millimetres, between power and data cabling."}
+     ]},
+     {"name": "After the pull", "items": [
+       {"text": "Cable ends sealed until they are terminated.", "source": "southwire_guide", "quote": "Cable ends must always be sealed to prevent the entrance of moisture"},
+       {"text": "Installed bend radius and supports checked: fiber 10 x OD at rest; J-hooks no more than 5 ft apart with sag under about 12 in.", "source": "cabletakeoff_jhooks", "quote": "The hard ceiling on spacing is 5 feet (60 inches) between supports."},
+       {"text": "Labels at both ends (and at every pull box for power): legible, permanent, matching the records.", "source": "brady_606", "quote": "Legible Permanent Placed at both ends of cables"},
+       {"text": "Pull log complete: cable ID, from/to, route, reel/lot, length, date, crew, tension OK, labeled both ends.", "source": "southwire_guide", "quote": null},
+       {"text": "Any route change red-lined on the as-built drawing.", "source": "hsm_cx_levels", "quote": "As-built drawings and single-line diagrams that match the installed facility"},
+       {"text": "Any damage found: photograph, HOLD tag, raise an NCR, tell the supervisor; do not terminate damaged cable.", "source": "hsm_cx_levels", "quote": null}
+     ]}
+   ]},
+
+  {"key": "reel_receiving", "module": 4, "title": "Cable reel receiving inspection",
+   "intro": "Inspect every reel when it is delivered, before it is accepted or moved to the pull. Anything that fails goes on HOLD with an NCR; it is not installed.",
+   "sections": [
+     {"name": "Paperwork", "items": [
+       {"text": "Delivery matches the purchase order and the approved submittal: cable type, size, voltage rating, conductor count.", "source": "procore_submittals", "quote": "ensure compliance with contract documents"},
+       {"text": "Reel tag read and logged: manufacturer, reel number, lot/heat number, length.", "source": "southwire_guide", "quote": null},
+       {"text": "Special instructions on the reel or packing list noted.", "source": "southwire_guide", "quote": "Special instructions"}
+     ]},
+     {"name": "Cable condition", "items": [
+       {"text": "No shipping damage: no cuts, gouges or crushed jacket on the outer wraps.", "source": "southwire_guide", "quote": "Shipping damage"},
+       {"text": "End seals present and intact on both ends.", "source": "southwire_guide", "quote": "End seals"},
+       {"text": "Fiber reels: length is enough for the planned run (no unplanned splice).", "source": "foa_installcbl", "quote": "Check the cable length to make sure the cable being pulled is long enough for the run"}
+     ]},
+     {"name": "Reel condition and handling", "items": [
+       {"text": "Reel not damaged; no protruding nails or staples that could cut the cable.", "source": "southwire_guide", "quote": "Check reels for: a. Damage b. Protruding nails that might damage cable c. Staples"},
+       {"text": "Unloaded correctly: forklift on both flanges, or crane with a shaft through the arbor hole / cradle under both flanges.", "source": "southwire_guide", "quote": "Forklifts must lift the reel by contacting both flanges."},
+       {"text": "Stored on a hard surface, upright, out of harm's way, so the flanges cannot sink onto the cable.", "source": "southwire_guide", "quote": "Store reels on hard surface so that the flanges will not sink and allow reel weight to rest on cable."}
+     ]},
+     {"name": "Record and disposition", "items": [
+       {"text": "Dated photos taken (tag, both ends, any damage) and the receiving log updated.", "source": "hsm_cx_levels", "quote": "Receiving inspection, pre-functional checklists, torque checks, labeling"},
+       {"text": "Non-conforming reel: HOLD tag, segregate, raise an NCR, notify the supervisor; do not install.", "source": "hsm_cx_levels", "quote": null}
+     ]}
+   ]},
+
+  {"key": "fiber_tier1", "module": 3, "title": "Fiber Tier 1 test (light source and power meter)",
+   "intro": "Tier 1 = loss, length and polarity with an optical loss test set. It is required by the standards; Tier 2 (OTDR) never replaces it. Use the project's test limits and reference method.",
+   "sections": [
+     {"name": "Before testing", "items": [
+       {"text": "Test scope agreed in writing: Tier 1 (and Tier 2 if specified), test limits, reference method, wavelengths, one or both directions.", "source": "fluke_top10", "quote": "Agreeing on testing upfront holds true for fiber testing as well."},
+       {"text": "Loss budget calculated for each link (connectors + splices + length x dB/km) and the reference method documented.", "source": "foa_loss_est", "quote": "Whatever test method is presumed, it must be documented when the loss budget is calculated."},
+       {"text": "Light source and power meter at the right wavelengths (MM 850/1300 nm, SM 1310/1550 nm); calibration date recorded.", "source": "foa_quickstart_test", "quote": "Optical power meter (#2) calibrated at the same wavelengths as the source output."},
+       {"text": "Reference cords match the fiber type and connectors and have been verified.", "source": "foa_quickstart_test", "quote": "of the same fiber type and size as the cable plant"},
+       {"text": "Multimode: encircled flux (EF) launch conditions set up.", "source": "fluke_top10", "quote": "For multimode fiber, industry standards require encircled flux (EF) testing"},
+       {"text": "Every connector inspected, cleaned and re-inspected with a scope (IEC 61300-3-35); check for live light first.", "source": "foa_8", "quote": "Reclean and inspect as necessary until the connector is acceptable."}
+     ]},
+     {"name": "Testing", "items": [
+       {"text": "Equipment warmed up; launch cord attached to the source and left connected for the whole test.", "source": "foa_refcables", "quote": "Once the 0 dB reference is set, one should not disconnect the launch cable from the source."},
+       {"text": "0 dB reference set with the 1-cord method unless the spec says otherwise.", "source": "fluke_top10", "quote": "Industry standards recommend using the one-jumper reference method to set a reference."},
+       {"text": "Loss measured at each required wavelength (both directions if specified).", "source": "foa_quickstart_test", "quote": "Attach source/ref cable and meter/ref cable to the cable plant under test and make loss measurement."},
+       {"text": "Polarity confirmed against the cable diagram (tester or visual fault locator).", "source": "foa_loss_est", "quote": "Polarity testing generally can be done with a visual fault locator"},
+       {"text": "0 dB reference re-checked periodically during the session.", "source": "foa_quickstart_test", "quote": "Check \"0 dB Reference\" periodically during testing."},
+       {"text": "Measured loss compared with the budget; high links investigated segment by segment.", "source": "foa_loss_est", "quote": "the system should be tested segment-by-segment to determine the cause of high loss"}
+     ]},
+     {"name": "Record", "items": [
+       {"text": "Recorded: date, cable and fiber ID, operator, test equipment, reference method, wavelength, measured loss.", "source": "foa_quickstart_test", "quote": "Reference method 6. Test wavelength 7. Measured loss."},
+       {"text": "Failures cleaned and retested; repeat failures go on an NCR; result files saved and linked in the test log.", "source": "foa_loss_est", "quote": null}
+     ]}
+   ]},
+
+  {"key": "cat6_cert", "module": 2, "title": "Cat6 permanent link certification",
+   "intro": "Certify every installed copper link with a calibrated certification tester against the limit named in the project spec. A passing permanent link plus compliant patch cords always makes a passing channel.",
+   "sections": [
+     {"name": "Set-up", "items": [
+       {"text": "Test limit selected exactly as specified (for example TIA Cat 6 Perm. Link, with PoE parameters if required).", "source": "fluke_top10", "quote": "The default test limit on a DSX CableAnalyzer"},
+       {"text": "Permanent link tested, not only the channel.", "source": "fluke_pl_channel", "quote": "That's why it's important to specify permanent link testing upfront."},
+       {"text": "Tester calibrated, firmware current, permanent link adapters not worn out.", "source": "fluke_top10", "quote": "making sure your permanent link adapters are not worn out"},
+       {"text": "Plot data enabled and saved with every result.", "source": "fluke_top10", "quote": "It is essential to enable plot data"}
+     ]},
+     {"name": "Results", "items": [
+       {"text": "Length within 90 m for the permanent link.", "source": "fluke_pl_channel", "quote": "The maximum permitted length of the permanent link is 90 meters."},
+       {"text": "Wire map correct with one scheme (T568A or T568B) used everywhere.", "source": "c3_install", "quote": "Use one wiring scheme - T568A or T568B - consistently across the whole facility"},
+       {"text": "Insertion loss, NEXT, return loss and other parameters pass the selected limit.", "source": "c3_install", "quote": "Test every completed channel for attenuation, return loss, NEXT and polarity"},
+       {"text": "Marginal PASS* results handled per the written agreement; the asterisk is never switched off.", "source": "fluke_top10", "quote": "Any tester that allows you to disable the asterisk and hide marginal results is non-compliant"},
+       {"text": "Camera and other MPTL links: permanent link adapter at the near end, patch cord adapter at the far end.", "source": "fluke_top10", "quote": "industry standards require a permanent link adapter at the near end and a patch cord adapter at the far end"}
+     ]},
+     {"name": "Workmanship and records", "items": [
+       {"text": "Terminations: pair untwist no more than 13 mm (1/2 in); jacket stripped only as needed.", "source": "c3_install", "quote": "No more than 13 millimetres, or half an inch, from the termination point"},
+       {"text": "Cable ID in the test record matches the labels at both ends and the as-built.", "source": "brady_606", "quote": "The standard requires you to link a record for each identifier that is printed on a label"},
+       {"text": "Results archived digitally (native tester file and PDF) and linked from the test log.", "source": "c3_install", "quote": "archive results digitally"},
+       {"text": "Failed links re-terminated and retested; repeat failures go on an NCR.", "source": "fluke_top10", "quote": null}
+     ]}
+   ]},
+
+  {"key": "ncr_closeout", "module": 1, "title": "NCR close-out",
+   "intro": "An NCR is closed only when the fix has been re-inspected and the closure evidence is attached. Walk this list before marking any NCR closed in the log.",
+   "sections": [
+     {"name": "The record", "items": [
+       {"text": "NCR has a unique number, date, raised-by, location, and the spec or drawing reference it fails.", "source": "hsm_cx_levels", "quote": null},
+       {"text": "Description and dated photos of the non-conformance attached.", "source": "hsm_cx_levels", "quote": "supporting data (power quality recordings, thermal images, trend logs)"},
+       {"text": "Containment recorded: HOLD tag, material segregated or work stopped.", "source": "hsm_cx_levels", "quote": null}
+     ]},
+     {"name": "Disposition and fix", "items": [
+       {"text": "Root cause identified and written down.", "source": "hsm_cx_levels", "quote": "resume only after the cause is understood"},
+       {"text": "Disposition approved by the responsible party (rework, repair, use as is, or reject).", "source": "hsm_cx_levels", "quote": null},
+       {"text": "Corrective action completed for this item.", "source": "procore_qsr", "quote": null},
+       {"text": "Preventive action decided so it does not recur elsewhere (other areas, other crews).", "source": "procore_qsr", "quote": null}
+     ]},
+     {"name": "Close-out", "items": [
+       {"text": "Re-inspection done and recorded (who, when); tests repeated where the NCR involved a test.", "source": "hsm_cx_levels", "quote": "Completed checklists and test scripts with recorded results, signatures and supporting data"},
+       {"text": "Closure evidence attached: after photos, retest reports, signatures.", "source": "hsm_cx_levels", "quote": "Completed checklists and test scripts with recorded results, signatures and supporting data"},
+       {"text": "Drawings, as-builts and logs updated to match the final condition.", "source": "hsm_cx_levels", "quote": "As-built drawings and single-line diagrams that match the installed facility"},
+       {"text": "NCR log status set to Closed with the close date and days open.", "source": "hsm_cx_levels", "quote": "The issues log, with every item closed or formally accepted with a plan."}
+     ]}
+   ]}
+]

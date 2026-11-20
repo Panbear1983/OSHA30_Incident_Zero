@@ -23,7 +23,9 @@ CREATE TABLE IF NOT EXISTS questions(
   qid TEXT PRIMARY KEY,
   kind TEXT NOT NULL CHECK(kind IN ('mc','blank')),
   category TEXT NOT NULL,
-  module_id INTEGER REFERENCES modules(id),
+  -- OSHA track: modules(id) 1-23.  QA/QC track: qaqc_modules(id) 101-106.  (Two possible
+  -- parents, so no REFERENCES clause; the CHECK at the bottom keeps the ranges apart.)
+  module_id INTEGER,
   lesson_id INTEGER REFERENCES lessons(id),
   prompt TEXT NOT NULL,
   correct TEXT NOT NULL,
@@ -31,12 +33,21 @@ CREATE TABLE IF NOT EXISTS questions(
   explanation TEXT,
   cfr TEXT,
   page INTEGER,
-  source_doc TEXT NOT NULL DEFAULT 'guide' CHECK(source_doc IN ('guide','sds')),
+  source_doc TEXT NOT NULL DEFAULT 'guide' CHECK(source_doc IN ('guide','sds','qaqc')),
   source_quote TEXT,
-  origin TEXT NOT NULL CHECK(origin IN ('deterministic','ollama','gemini','imported')));
+  origin TEXT NOT NULL CHECK(origin IN ('deterministic','ollama','gemini','imported','claude')),
+  track TEXT NOT NULL DEFAULT 'osha' CHECK(track IN ('osha','qaqc')),
+  source_url TEXT,
+  source_label TEXT,
+  CHECK ((track = 'osha' AND source_doc IN ('guide','sds') AND (module_id IS NULL OR module_id BETWEEN 1 AND 99))
+      OR (track = 'qaqc' AND source_doc = 'qaqc' AND module_id BETWEEN 101 AND 199
+          AND length(coalesce(source_url, '')) > 0 AND length(coalesce(source_label, '')) > 0)));
 CREATE INDEX IF NOT EXISTS idx_q_module ON questions(module_id);
 CREATE INDEX IF NOT EXISTS idx_q_cat ON questions(category);
+CREATE INDEX IF NOT EXISTS idx_q_track ON questions(track);
 -- Shared fact base (Look Up / Inspect / Interview all read this; none of them mine the PDF).
+-- QA/QC facts (glossary terms with a Traditional Chinese name, key numbers) cite a public
+-- source page instead of a guide page: page = 0, source_url / source_label set.
 CREATE TABLE IF NOT EXISTS facts(
   fid TEXT PRIMARY KEY,
   kind TEXT NOT NULL CHECK(kind IN ('term','threshold','deadline','cfr','rule','sds')),
@@ -44,14 +55,21 @@ CREATE TABLE IF NOT EXISTS facts(
   value TEXT NOT NULL,
   quote TEXT NOT NULL,
   page INTEGER NOT NULL,
-  module_id INTEGER REFERENCES modules(id),
+  module_id INTEGER,
   lesson_id INTEGER REFERENCES lessons(id),
   cfr TEXT,
   number REAL,
   unit TEXT,
-  source_doc TEXT NOT NULL DEFAULT 'guide' CHECK(source_doc IN ('guide','sds')));
+  source_doc TEXT NOT NULL DEFAULT 'guide' CHECK(source_doc IN ('guide','sds','qaqc')),
+  track TEXT NOT NULL DEFAULT 'osha' CHECK(track IN ('osha','qaqc')),
+  source_url TEXT,
+  source_label TEXT,
+  zh TEXT,
+  CHECK ((track = 'osha' AND source_doc IN ('guide','sds'))
+      OR (track = 'qaqc' AND source_doc = 'qaqc' AND length(coalesce(source_url, '')) > 0)));
 CREATE INDEX IF NOT EXISTS idx_f_kind ON facts(kind);
 CREATE INDEX IF NOT EXISTS idx_f_module ON facts(module_id);
+CREATE INDEX IF NOT EXISTS idx_f_track ON facts(track);
 CREATE VIRTUAL TABLE IF NOT EXISTS facts_fts USING fts5(
   subject, value, quote, fid UNINDEXED, tokenize='porter unicode61');
 -- Inspect: one ordered checklist per module, built from 'rule' facts at build time.
@@ -75,6 +93,28 @@ CREATE TABLE IF NOT EXISTS scenarios(
   answer_json TEXT NOT NULL,
   origin TEXT NOT NULL DEFAULT 'deterministic' CHECK(origin IN ('deterministic','ollama')));
 CREATE INDEX IF NOT EXISTS idx_s_module ON scenarios(module_id);
+-- QA/QC track (separate from the OSHA course: own modules, own checklists, own sources).
+CREATE TABLE IF NOT EXISTS qaqc_modules(
+  id INTEGER PRIMARY KEY CHECK(id BETWEEN 101 AND 199),
+  week INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  topic TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS qaqc_checklists(
+  key TEXT PRIMARY KEY,
+  module_id INTEGER NOT NULL REFERENCES qaqc_modules(id),
+  seq INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  intro TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS qaqc_checklist_items(
+  cid TEXT PRIMARY KEY,
+  list_key TEXT NOT NULL REFERENCES qaqc_checklists(key),
+  seq INTEGER NOT NULL,
+  section TEXT NOT NULL,
+  text TEXT NOT NULL,
+  source_url TEXT NOT NULL,
+  source_label TEXT NOT NULL,
+  quote TEXT);
+CREATE INDEX IF NOT EXISTS idx_qci_list ON qaqc_checklist_items(list_key, seq);
 """
 
 PROGRESS_DDL = """
@@ -132,6 +172,16 @@ CREATE TABLE IF NOT EXISTS interview_ratings(
   rating INTEGER NOT NULL CHECK(rating IN (1,2,3)),
   at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_ir_profile ON interview_ratings(profile_id, at);
+-- Per-track streak for tracks other than OSHA (added with the QA/QC track; additive only).
+-- The OSHA streak stays in profiles.days_without_incident / best_streak / lifetime_score,
+-- so a QA/QC shift can never move an OSHA number.
+CREATE TABLE IF NOT EXISTS track_streaks(
+  profile_id INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  track TEXT NOT NULL,
+  days_without_incident INTEGER NOT NULL DEFAULT 0,
+  best_streak INTEGER NOT NULL DEFAULT 0,
+  lifetime_score INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(profile_id, track));
 """
 
 

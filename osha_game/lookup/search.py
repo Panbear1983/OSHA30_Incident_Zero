@@ -88,7 +88,7 @@ def _fts_expr(toks: list[str], op: str) -> str:
 
 
 def _rows(con: sqlite3.Connection, expr: str, schema: str, kind: str | None,
-          module_id: int | None, limit: int) -> list[sqlite3.Row]:
+          module_id: int | None, limit: int, track: str | None = None) -> list[sqlite3.Row]:
     where = ""
     params: list = [expr]
     if kind:
@@ -97,6 +97,9 @@ def _rows(con: sqlite3.Connection, expr: str, schema: str, kind: str | None,
     if module_id is not None:
         where += " AND f.module_id = ?"
         params.append(module_id)
+    if track:
+        where += " AND f.track = ?"
+        params.append(track)
     params.append(limit)
     # FTS5 wants the bare table name (never schema-qualified, never an alias) on the left
     # of MATCH and inside bm25(), even when the bank is ATTACHed under a schema prefix.
@@ -111,15 +114,68 @@ def _rows(con: sqlite3.Connection, expr: str, schema: str, kind: str | None,
     return con.execute(sql, params).fetchall()
 
 
+TRACKS = ("osha", "qaqc")
+TRACK_LABEL = {None: "all tracks", "osha": "OSHA 30", "qaqc": "QA/QC"}
+_CJK = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+")
+
+
+def _topic(module_id) -> str:
+    if not module_id:
+        return ""
+    if module_id >= 101:
+        from ..content.qaqc import TOPICS as QAQC_TOPICS
+        return QAQC_TOPICS.get(module_id, "")
+    return TOPICS.get(module_id, "")
+
+
+def _cjk_search(con: sqlite3.Connection, query: str, schema: str, kind: str | None,
+                module_id: int | None, limit: int, track: str | None) -> list[dict]:
+    """Chinese query (e.g. a 繁體中文 glossary name such as 上鎖掛籤): plain substring match on
+    the stored Chinese name, subject and value. Every run of Chinese characters in the query
+    must appear; an exact match on the Chinese name ranks first."""
+    runs = _CJK.findall(query)
+    where, params = [], []
+    for run in runs:
+        where.append("(coalesce(f.zh,'') || ' ' || f.subject || ' ' || f.value) LIKE ?")
+        params.append(f"%{run}%")
+    for col, val in (("f.kind", kind), ("f.module_id", module_id), ("f.track", track)):
+        if val is not None:
+            where.append(f"{col} = ?")
+            params.append(val)
+    rows = con.execute(
+        f"SELECT f.* FROM {schema}facts f WHERE {' AND '.join(where)} LIMIT ?",
+        (*params, limit * 3),
+    ).fetchall()
+    joined = "".join(runs)
+    out = []
+    for r in rows:
+        d = dict(r)
+        zh = d.get("zh") or ""
+        d["score"] = 0.0 if zh == joined else (1.0 if joined in zh else 2.0)
+        d["topic"] = _topic(d["module_id"])
+        out.append(d)
+    out.sort(key=lambda d: (d["score"], len(d.get("zh") or ""), d["subject"]))
+    return out[:limit]
+
+
 def search(con: sqlite3.Connection, query: str, *, kind: str | None = None,
-           module_id: int | None = None, limit: int = 12, schema: str = "") -> list[dict]:
+           module_id: int | None = None, limit: int = 12, schema: str = "",
+           track: str | None = "osha") -> list[dict]:
     """Ranked facts for a free-text query. Tries all-words-must-match first, then tops up
-    with any-word matches. Returns plain dicts with a `score` (lower is better) and `topic`."""
+    with any-word matches. Returns plain dicts with a `score` (lower is better) and `topic`.
+
+    `track`: 'osha' (the default, what every caller before the QA/QC track got), 'qaqc', or
+    None for both. The Look Up screen and the CLI pass the reader's own choice (both, by
+    default). A query containing Chinese characters searches the glossary's Chinese names."""
+    if track is not None and track not in TRACKS:
+        raise ValueError(f"unknown track {track!r}")
+    if kind is not None and kind not in KINDS:
+        raise ValueError(f"unknown kind {kind!r}")
+    if _CJK.search(query):
+        return _cjk_search(con, query, schema, kind, module_id, limit, track)
     toks = tokens(query)
     if not toks:
         return []
-    if kind is not None and kind not in KINDS:
-        raise ValueError(f"unknown kind {kind!r}")
 
     hard, soft = split_hard_soft(toks)
     soft_rx = [re.compile(r"\b" + re.escape(t), re.I) for t in soft]
@@ -133,7 +189,7 @@ def search(con: sqlite3.Connection, query: str, *, kind: str | None = None,
         if not expr:
             break
         try:
-            rows = _rows(con, expr, schema, kind, module_id, limit * 3)
+            rows = _rows(con, expr, schema, kind, module_id, limit * 3, track)
         except sqlite3.OperationalError as exc:
             if "no such table" in str(exc):
                 raise RuntimeError("fact base missing -- run: ./dashboard.sh build") from exc
@@ -151,21 +207,36 @@ def search(con: sqlite3.Connection, query: str, *, kind: str | None = None,
             d["score"] -= 1.5 * sum(1 for rx in soft_rx if rx.search(hay))
             if unit_wanted:
                 d["score"] -= 6.0
-            d["topic"] = TOPICS.get(d["module_id"], "") if d["module_id"] else ""
+            d["topic"] = _topic(d["module_id"])
             found[r["fid"]] = d
     ranked = sorted(found.values(), key=lambda d: (d["score"], d["kind"], d["page"]))
     return ranked[:limit]
+
+
+def is_qaqc(d: dict) -> bool:
+    return d.get("track") == "qaqc"
+
+
+def cite(d: dict) -> str:
+    """Where a fact comes from: 'p.42' for the OSHA guide, the source label for QA/QC."""
+    if is_qaqc(d):
+        return f"source: {d.get('source_label') or ''}"
+    return f"p.{d['page']}"
 
 
 def one_line(d: dict, width: int = 100) -> str:
     """Compact single-line rendering used by the CLI --plain mode and the screen list."""
     label = KIND_LABEL.get(d["kind"], d["kind"].upper())
     head = d["subject"] if d["kind"] in ("term", "threshold", "deadline", "cfr", "sds") else d["topic"]
+    if d.get("zh"):
+        head = f"{head} {d['zh']}"
+    if is_qaqc(d):
+        label = f"QA/QC {label}"
     body = d["value"]
     text = f"[{label}] {head} -- {body}"
     if len(text) > width:
         text = text[: width - 3] + "..."
-    return f"{text}  (p.{d['page']})"
+    return f"{text}  ({cite(d)})"
 
 
 def has_facts(con: sqlite3.Connection, schema: str = "") -> bool:

@@ -21,13 +21,21 @@ def cmd_status(argv: list[str]) -> int:
 
     if paths.BANK_DB.exists():
         con = db.bank_connect(paths.BANK_DB)
+        has_track = "track" in {r[1] for r in con.execute("PRAGMA table_info(questions)")}
+        where = " WHERE track='osha'" if has_track else ""
         rows = con.execute(
-            "SELECT origin, category, COUNT(*) FROM questions GROUP BY origin, category ORDER BY origin, category"
+            f"SELECT origin, category, COUNT(*) FROM questions{where} "
+            "GROUP BY origin, category ORDER BY origin, category"
         ).fetchall()
-        total = con.execute("SELECT COUNT(*) FROM questions").fetchone()[0]
-        print(f"  bank.db:     {total} questions")
+        total = con.execute(f"SELECT COUNT(*) FROM questions{where}").fetchone()[0]
+        print(f"  bank.db:     {total} OSHA questions")
         for r in rows:
             print(f"    {r['origin']:<13} {r['category']:<14} {r[2]}")
+        if has_track:
+            nq = con.execute("SELECT COUNT(*) FROM questions WHERE track='qaqc'").fetchone()[0]
+            print(f"  qa/qc track: {nq} questions -- details: ./dashboard.sh qaqc status")
+        else:
+            print("  qa/qc track: not in this bank -- run: ./dashboard.sh qaqc build")
         has_facts = con.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='facts'").fetchone()
         if has_facts:
@@ -72,17 +80,37 @@ def cmd_run(argv: list[str]) -> int:
     if not paths.BANK_DB.exists():
         print("No question bank yet -- run './dashboard.sh build' first.")
         return 1
+    from . import db
+    from .content import qaqc
+    con = db.bank_connect(paths.BANK_DB)
+    try:
+        stale = qaqc.needs_migration(con)
+    finally:
+        con.close()
+    if stale:
+        print("This bank.db predates the QA/QC track -- run './dashboard.sh qaqc build' once "
+              "(it backs up bank.db and progress.db first).")
+        return 1
     from .ui.app import InspectorApp
     InspectorApp().run()
     return 0
 
 
+def cmd_qaqc(argv: list[str]) -> int:
+    """./dashboard.sh qaqc [fetch | build | status]  -- the separate QA/QC track."""
+    from .content import qaqc
+    return qaqc.main(argv)
+
+
 def cmd_lookup(argv: list[str]) -> int:
-    """./dashboard.sh lookup [--kind K] [--module N] [--limit N] [--plain] words..."""
+    """./dashboard.sh lookup [--kind K] [--module N] [--track osha|qaqc|all] [--limit N] [--plain] words...
+    Searches both tracks (OSHA 30 and QA/QC) unless --track narrows it. Chinese works too:
+    ./dashboard.sh lookup 上鎖掛籤"""
     from . import paths, db
     from .lookup import search as srch
 
     kind = module_id = None
+    track: str | None = None
     limit = 10
     plain = False
     words: list[str] = []
@@ -93,6 +121,8 @@ def cmd_lookup(argv: list[str]) -> int:
             kind = argv[i + 1]; i += 2; continue
         if a in ("--module", "-m") and i + 1 < len(argv):
             module_id = int(argv[i + 1]); i += 2; continue
+        if a in ("--track", "-t") and i + 1 < len(argv):
+            track = None if argv[i + 1] == "all" else argv[i + 1]; i += 2; continue
         if a in ("--limit", "-n") and i + 1 < len(argv):
             limit = int(argv[i + 1]); i += 2; continue
         if a == "--plain":
@@ -112,7 +142,7 @@ def cmd_lookup(argv: list[str]) -> int:
         print("This bank predates the fact base -- run './dashboard.sh build' to add it.")
         return 1
     try:
-        hits = srch.search(con, query, kind=kind, module_id=module_id, limit=limit)
+        hits = srch.search(con, query, kind=kind, module_id=module_id, limit=limit, track=track)
     except ValueError as exc:
         print(exc); return 2
     if not hits:
@@ -130,16 +160,23 @@ def cmd_lookup(argv: list[str]) -> int:
     console.print(f"[bold]{len(hits)} facts for[/bold] [cyan]{query}[/cyan]")
     for d in hits:
         label = srch.KIND_LABEL.get(d["kind"], d["kind"].upper())
+        if srch.is_qaqc(d):
+            label = f"QA/QC {label}"
         t = Text()
         t.append(f"{label}  ", style="bold yellow")
         t.append(d["subject"], style="bold")
+        if d.get("zh"):
+            t.append(f"  {d['zh']}", style="bold cyan")
         t.append("\n")
         t.append(d["value"])
-        meta = f"p.{d['page']}"
+        meta = srch.cite(d)
         if d["cfr"]:
             meta += f"   29 CFR {d['cfr']}"
         if d["topic"]:
-            meta += f"   M{d['module_id']:02d} {d['topic']}"
+            from .content.qaqc import module_label
+            meta += f"   {module_label(d['module_id'])} {d['topic']}"
+        if srch.is_qaqc(d) and d.get("source_url"):
+            meta += f"\n{d['source_url']}"
         t.append("\n" + meta, style="dim")
         console.print(Panel(t, border_style="blue", padding=(0, 1)))
     return 0
@@ -166,7 +203,7 @@ def cmd_reset(argv: list[str]) -> int:
 
 COMMANDS = {
     "build": cmd_build, "status": cmd_status, "run": cmd_run, "ai": cmd_ai,
-    "reset": cmd_reset, "lookup": cmd_lookup, "export": cmd_export,
+    "reset": cmd_reset, "lookup": cmd_lookup, "export": cmd_export, "qaqc": cmd_qaqc,
 }
 
 

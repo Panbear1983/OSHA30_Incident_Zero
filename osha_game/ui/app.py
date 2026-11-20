@@ -41,7 +41,17 @@ class GameState:
         self.profile_name: str | None = None
         self.active_shift = None       # a game.rules.Shift while a shift is in progress
         self.active_exam = None        # a game.rules.Exam while an exam is in progress
-        self.current_module_id: int | None = None   # last module picked on the plant map
+        self.track: str = "osha"       # 'osha' or 'qaqc'; picked on the dashboard (k)
+        self._module_by_track: dict[str, int | None] = {}
+
+    @property
+    def current_module_id(self) -> int | None:
+        """Last module picked on the plant map, remembered per track."""
+        return self._module_by_track.get(self.track)
+
+    @current_module_id.setter
+    def current_module_id(self, value: int | None) -> None:
+        self._module_by_track[self.track] = value
 
 
 class InspectorApp(App):

@@ -24,9 +24,14 @@ def module_mastery(con, profile_id: int, module_id: int) -> float:
     return 100.0 * total / len(qids)
 
 
-def all_mastery(con, profile_id: int) -> dict[int, float]:
-    mod_ids = [r["id"] for r in con.execute("SELECT id FROM bank.modules ORDER BY id").fetchall()]
-    return {m: module_mastery(con, profile_id, m) for m in mod_ids}
+def all_mastery(con, profile_id: int, track: str = "osha") -> dict[int, float]:
+    return {m: module_mastery(con, profile_id, m) for m in module_ids(con, track)}
+
+
+def module_ids(con, track: str = "osha") -> list[int]:
+    """OSHA: the 23 course modules. QA/QC: its own six modules (101-106)."""
+    table = "bank.modules" if track == "osha" else "bank.qaqc_modules"
+    return [r["id"] for r in con.execute(f"SELECT id FROM {table} ORDER BY id").fetchall()]
 
 
 def clean_shift_count(con, profile_id: int, module_id: int) -> int:
@@ -37,6 +42,8 @@ def clean_shift_count(con, profile_id: int, module_id: int) -> int:
 
 
 def module_unlocked(con, profile_id: int, module_id: int) -> bool:
+    if module_id >= 101:            # QA/QC modules: a study program, every week is open
+        return True
     if module_id <= 1:
         return True
     prior = module_id - 1
@@ -45,9 +52,8 @@ def module_unlocked(con, profile_id: int, module_id: int) -> bool:
     return module_mastery(con, profile_id, prior) >= 30.0
 
 
-def unlocked_modules(con, profile_id: int) -> list[int]:
-    mod_ids = [r["id"] for r in con.execute("SELECT id FROM bank.modules ORDER BY id").fetchall()]
-    return [m for m in mod_ids if module_unlocked(con, profile_id, m)]
+def unlocked_modules(con, profile_id: int, track: str = "osha") -> list[int]:
+    return [m for m in module_ids(con, track) if module_unlocked(con, profile_id, m)]
 
 
 def exam_unlocked(con, profile_id: int) -> bool:

@@ -13,6 +13,13 @@ repository. No code, data, exports, or notes go anywhere else.
 | 3 Inspect | done — 1,100 checklist items / 23 modules, Word + PDF export |
 | 4 Interview | done — 56 deterministic scenarios (+ optional local-model narratives) |
 | 5 Publish | done — README, screenshots, public repository |
+| 6 QA/QC track | done 2026-11-20 — separate track (modules 101-106 = Q1-Q6), 185 grounded questions, 45-term EN/繁中 glossary, 35 key numbers, 5 checklists; OSHA rows verified identical |
+
+The QA/QC track (phase 6) shares the scheduler and the four doors but not the content or
+the scoring: `questions.track` / `facts.track` separate the two, OSHA modules stay 1-99 and
+QA/QC modules 101-199 (enforced by a CHECK on the table), the mock exam and every OSHA number
+read `track='osha'` only, and QA/QC streaks live in progress.db `track_streaks` (additive).
+Grounding is on cached public web sources instead of the guide; see README.
 
 ## Ground rules
 

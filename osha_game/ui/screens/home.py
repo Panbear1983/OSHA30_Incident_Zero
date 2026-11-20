@@ -11,8 +11,8 @@ from textual.containers import Vertical
 from textual.screen import Screen
 from textual.widgets import Digits, Static
 
-from ...content.segment import TOPICS
-from ...game import mastery
+from ...game import mastery, tracks
+from ... import srs as srsmod
 
 
 class HomeScreen(Screen):
@@ -113,18 +113,20 @@ class HomeScreen(Screen):
 
     def _target_module_id(self) -> int:
         """The current/default module: state.current_module_id if set, else the lowest
-        unlocked id (module 1 is always unlocked, so unlocked_modules() is never empty)."""
+        unlocked id of the current track (its first module is always unlocked)."""
         mid = self.app.state.current_module_id
         if mid is not None:
             return mid
-        unlocked = mastery.unlocked_modules(self.app.con, self.app.state.profile_id)
-        return min(unlocked) if unlocked else 1
+        track = self.app.state.track
+        unlocked = mastery.unlocked_modules(self.app.con, self.app.state.profile_id, track)
+        return min(unlocked) if unlocked else (101 if track == "qaqc" else 1)
 
     def _refresh(self) -> None:
         profile_id = self.app.state.profile_id
         if profile_id is None:
             return
         con = self.app.con
+        track = self.app.state.track
 
         row = con.execute(
             "SELECT name, days_without_incident, best_streak FROM profiles WHERE id=?",
@@ -132,23 +134,36 @@ class HomeScreen(Screen):
         ).fetchone()
         if row is None:
             return
+        if track == "osha":
+            streak, best = row["days_without_incident"], row["best_streak"]
+        else:
+            from ...game.rules import track_streak
+            ts = track_streak(con, profile_id, track)
+            streak, best = ts["days_without_incident"], ts["best_streak"]
 
-        due_count = con.execute(
-            "SELECT COUNT(*) FROM srs WHERE profile_id=? AND due<=?",
-            (profile_id, datetime.now(timezone.utc).isoformat()),
-        ).fetchone()[0]
-
-        unlocked_count = len(mastery.unlocked_modules(con, profile_id))
+        due_count = srsmod.due_count(con, profile_id, track)
+        unlocked_count = len(mastery.unlocked_modules(con, profile_id, track))
+        total = len(mastery.module_ids(con, track))
         module_id = self._target_module_id()
 
-        self.query_one("#subtitle", Static).update(f"Welcome back, {row['name']}")
-        self.query_one("#streak", Digits).update(str(row["days_without_incident"]))
-        self.query_one("#best-streak", Static).update(f"Best streak: {row['best_streak']}")
+        title = "INCIDENT ZERO -- BREAK ROOM" if track == "osha" else "INCIDENT ZERO -- QA/QC BREAK ROOM"
+        self.query_one("#title", Static).update(title)
+        self.query_one("#subtitle", Static).update(
+            f"Welcome back, {row['name']}   (track: {tracks.NAMES[track]})")
+        self.query_one("#streak", Digits).update(str(streak))
+        self.query_one("#best-streak", Static).update(f"Best streak: {best}")
         self.query_one("#due-line", Static).update(f"Reviews due: {due_count}")
-        self.query_one("#module-line", Static).update(
-            f"Module {module_id}: {TOPICS.get(module_id, '')}"
-        )
-        self.query_one("#unlocked-line", Static).update(f"{unlocked_count}/23 modules unlocked")
+        if track == "osha":
+            module_line = f"Module {module_id}: {tracks.topic(module_id)}"
+        else:
+            module_line = f"Module {tracks.label(module_id)}: {tracks.topic(module_id)}"
+        self.query_one("#module-line", Static).update(module_line)
+        self.query_one("#unlocked-line", Static).update(f"{unlocked_count}/{total} modules unlocked")
+        footer = ("[s] Start Shift   [m] Plant Map   [e] Exam   [t] Stats   "
+                  "[b] Dashboard   [p] Switch Profile   [q] Quit")
+        if track != "osha":
+            footer = footer.replace("[e] Exam   ", "")
+        self.query_one("#footer", Static).update(footer)
 
     def action_start_shift(self) -> None:
         self.app.show("shift", module_id=self._target_module_id())
@@ -157,6 +172,10 @@ class HomeScreen(Screen):
         self.app.show("plantmap")
 
     def action_exam(self) -> None:
+        if self.app.state.track != "osha":
+            self.app.notify("The mock exam is the OSHA 30 exam -- QA/QC has no exam. "
+                            "Switch track on the dashboard (k).", severity="warning")
+            return
         if mastery.exam_unlocked(self.app.con, self.app.state.profile_id):
             self.app.show("exam")
         else:

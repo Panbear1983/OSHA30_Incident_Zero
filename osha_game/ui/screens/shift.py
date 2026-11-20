@@ -15,7 +15,7 @@ from textual.widgets import Static
 
 from .. import fx, theme
 from . import modal
-from ...game import rules
+from ...game import rules, tracks
 
 
 class ShiftScreen(Screen):
@@ -90,7 +90,8 @@ class ShiftScreen(Screen):
 
     def on_mount(self) -> None:
         size = self.app.cfg["game"]["shift_size"]
-        self.shift = rules.Shift(self.app.con, self.app.state.profile_id, self.module_id, size=size)
+        self.shift = rules.Shift(self.app.con, self.app.state.profile_id, self.module_id, size=size,
+                                 track=self.app.state.track)
         self.app.state.active_shift = self.shift
         self._awaiting_retry = False
         self._bet_armed = False
@@ -108,7 +109,9 @@ class ShiftScreen(Screen):
 
         header = (
             f"Q {self.shift.index + 1}/{len(self.shift.questions)}   "
-            f"score {self.shift.score}   module {q['module_id']}"
+            f"score {self.shift.score}   "
+            + (f"module {q['module_id']}" if self.shift.track == "osha"
+               else f"QA/QC {tracks.label(q['module_id'])} {tracks.topic(q['module_id'])}")
         )
         self.query_one("#header", Static).update(header)
 
@@ -177,6 +180,8 @@ class ShiftScreen(Screen):
                 detail += f"  ({inc['cfr']})"
             if inc["page"]:
                 detail += f"  -- p. {inc['page']}"
+            if inc.get("source_label"):
+                detail += f"  -- {inc['source_label']}"
             status.update(f"VIOLATION -- {detail}")
 
         self._awaiting_retry = False

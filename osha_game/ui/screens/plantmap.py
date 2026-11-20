@@ -7,8 +7,7 @@ from textual.screen import Screen
 from textual.widgets import Button, Static
 
 from .. import theme
-from ...game import mastery
-from ...content.segment import TOPICS
+from ...game import mastery, tracks
 
 
 class PlantMapScreen(Screen):
@@ -48,26 +47,29 @@ class PlantMapScreen(Screen):
         self._module_ids: list[int] = []
 
     def compose(self) -> ComposeResult:
-        yield Static("PLANT MAP", classes="title")
+        title = "PLANT MAP" if self.app.state.track == "osha" else "PLANT MAP -- QA/QC"
+        yield Static(title, classes="title")
         yield Grid()
 
     def on_mount(self) -> None:
         con = self.app.con
         profile_id = self.app.state.profile_id
-        self._module_ids = [
-            r["id"] for r in con.execute("SELECT id FROM bank.modules ORDER BY id").fetchall()
-        ]
+        track = self.app.state.track
+        self._module_ids = mastery.module_ids(con, track)
 
         grid = self.query_one(Grid)
+        if track != "osha":
+            grid.styles.grid_size_columns = 3
+            grid.styles.grid_size_rows = 2
         for mod_id in self._module_ids:
             pct = mastery.module_mastery(con, profile_id, mod_id)
             unlocked = mastery.module_unlocked(con, profile_id, mod_id)
             band = mastery.band_for(pct, locked=not unlocked)
             color = theme.BAND_COLOR[band]
 
-            topic = TOPICS.get(mod_id, f"Module {mod_id}")
+            topic = tracks.topic(mod_id)
             status = "LOCKED" if not unlocked else f"{pct:.0f}%"
-            label = Text(f"M{mod_id:02d}\n{topic}\n{status}", justify="center")
+            label = Text(f"{tracks.label(mod_id)}\n{topic}\n{status}", justify="center")
 
             btn = Button(label, id=f"tile-{mod_id}", disabled=not unlocked)
             btn.styles.background = color

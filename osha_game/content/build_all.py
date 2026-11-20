@@ -83,6 +83,15 @@ def rebuild():
     derived_counts = {}
     derived_counts.update(checklistmod.build_and_insert(con, ctx))
     derived_counts.update(scenariosmod.build_and_insert(con, ctx))
+    # The separate QA/QC track (own modules 101-106, grounded on cached public source pages).
+    # Without the source cache it is skipped loudly rather than built ungrounded.
+    from . import qaqc as qaqcmod, qaqc_sources
+    if qaqc_sources.have_cache():
+        qrep = qaqcmod.build_and_insert(con)
+        derived_counts["qaqc_questions"] = qrep["questions"]["accepted"]
+        derived_counts["qaqc_rejected"] = len(qrep["questions"]["rejected"])
+    else:
+        derived_counts["qaqc_skipped"] = "no source cache: run ./dashboard.sh qaqc fetch, then build again"
     con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('modules', ?)", (str(len(ctx.modules)),))
     con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('lessons', ?)", (str(len(ctx.lessons)),))
     con.commit()

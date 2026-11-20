@@ -21,6 +21,7 @@ from textual.widgets.option_list import Option
 from .. import theme
 from .modal import ConfirmModal
 from ...content.segment import TOPICS
+from ...game import tracks
 
 _STOP = {
     "a", "an", "the", "of", "to", "in", "on", "for", "is", "are", "be", "and", "or", "must",
@@ -119,8 +120,11 @@ class InspectScreen(Screen):
         super().__init__()
         self.stage = "pick"
         self.module_id: int | None = None
+        self.list_key: str | None = None      # QA/QC track: the open checklist's key
+        self.track = "osha"
         self._items: list = []               # rows of bank.checklist_items for the open module
         self._ticked: set[str] = set()       # cids ticked for this profile in the open module
+        self._qaqc_keys: list[str] = []
 
     # -- layout ----------------------------------------------------------------
 
@@ -134,6 +138,9 @@ class InspectScreen(Screen):
             yield Static(self._PICK_HINT, id="hint")
 
     def on_mount(self) -> None:
+        self.track = self.app.state.track
+        if self.track == "qaqc":
+            self.query_one("#title", Static).update("INSPECT -- QA/QC")
         self._show_picker()
 
     # -- helpers ---------------------------------------------------------------
@@ -141,6 +148,33 @@ class InspectScreen(Screen):
     @property
     def _profile_id(self):
         return self.app.state.profile_id
+
+    @property
+    def _qaqc(self) -> bool:
+        return self.track == "qaqc"
+
+    def _qaqc_counts(self) -> dict[str, tuple[int, int]]:
+        """checklist key -> (ticked, total) for the current profile (QA/QC track)."""
+        con = self.app.con
+        totals = {r[0]: r[1] for r in con.execute(
+            "SELECT list_key, COUNT(*) FROM bank.qaqc_checklist_items GROUP BY list_key").fetchall()}
+        ticked: dict[str, int] = {}
+        if self._profile_id is not None:
+            for r in con.execute(
+                "SELECT c.list_key, COUNT(*) FROM checklist_ticks t "
+                "JOIN bank.qaqc_checklist_items c ON c.cid = t.cid "
+                "WHERE t.profile_id=? GROUP BY c.list_key", (self._profile_id,),
+            ).fetchall():
+                ticked[r[0]] = r[1]
+        return {k: (ticked.get(k, 0), n) for k, n in totals.items()}
+
+    def _qaqc_line(self, row, done: int, total: int) -> Text:
+        t = Text()
+        t.append(f"{tracks.label(row['module_id']):<5}", style=f"bold {theme.GOLD}")
+        t.append(f"{row['title']:<50}", style=theme.TEXT)
+        color = theme.SAFE if total and done == total else (theme.INFO if done else theme.MUTED)
+        t.append(f"{done:>4}/{total:<4} ticked", style=color)
+        return t
 
     def _tick_counts(self) -> dict[int, tuple[int, int]]:
         """module_id -> (ticked, total) for the current profile."""
@@ -173,27 +207,60 @@ class InspectScreen(Screen):
     def _show_picker(self, keep: int | None = None) -> None:
         self.stage = "pick"
         self.module_id = None
+        self.list_key = None
         self._items = []
         self._ticked = set()
 
-        counts = self._tick_counts()
         modules = self.query_one("#modules", OptionList)
         modules.clear_options()
-        ids = [r[0] for r in self.app.con.execute("SELECT id FROM bank.modules ORDER BY id").fetchall()]
-        for mid in ids:
-            done, total = counts.get(mid, (0, 0))
-            modules.add_option(Option(self._module_line(mid, done, total), id=str(mid)))
+        if self._qaqc:
+            counts = self._qaqc_counts()
+            rows = self.app.con.execute(
+                "SELECT key, module_id, title FROM bank.qaqc_checklists ORDER BY seq").fetchall()
+            self._qaqc_keys = [r["key"] for r in rows]
+            for r in rows:
+                done, total = counts.get(r["key"], (0, 0))
+                modules.add_option(Option(self._qaqc_line(r, done, total), id=f"qaqc:{r['key']}"))
+            subtitle = "Pick a QA/QC checklist to walk."
+        else:
+            counts = self._tick_counts()
+            ids = [r[0] for r in self.app.con.execute("SELECT id FROM bank.modules ORDER BY id").fetchall()]
+            for mid in ids:
+                done, total = counts.get(mid, (0, 0))
+                modules.add_option(Option(self._module_line(mid, done, total), id=str(mid)))
+            subtitle = "Pick a module to walk its checklist."
         if modules.option_count:
             modules.highlighted = keep if (keep is not None and keep < modules.option_count) else 0
 
         self.query_one("#items", OptionList).add_class("hidden")
         self.query_one("#detail", Static).add_class("hidden")
         modules.remove_class("hidden")
-        self.query_one("#subtitle", Static).update("Pick a module to walk its checklist.")
+        self.query_one("#subtitle", Static).update(subtitle)
         self.query_one("#hint", Static).update(self._PICK_HINT)
         modules.focus()
 
     # -- stage 2: walk ---------------------------------------------------------
+
+    def _open_qaqc_walk(self, key: str) -> None:
+        con = self.app.con
+        self._items = con.execute(
+            "SELECT cid, seq, text, NULL AS page, NULL AS cfr, NULL AS lesson_id, section AS lesson, "
+            "source_label, source_url FROM bank.qaqc_checklist_items WHERE list_key=? ORDER BY seq",
+            (key,),
+        ).fetchall()
+        if not self._items:
+            self.app.notify("No items in that checklist.", severity="warning")
+            return
+        self.stage = "walk"
+        self.list_key = key
+        self.module_id = None
+        self._ticked = set()
+        if self._profile_id is not None:
+            self._ticked = {r[0] for r in con.execute(
+                "SELECT t.cid FROM checklist_ticks t JOIN bank.qaqc_checklist_items c ON c.cid = t.cid "
+                "WHERE t.profile_id=? AND c.list_key=?", (self._profile_id, key),
+            ).fetchall()}
+        self._fill_walk()
 
     def _open_walk(self, module_id: int) -> None:
         con = self.app.con
@@ -215,7 +282,9 @@ class InspectScreen(Screen):
                 "WHERE t.profile_id=? AND c.module_id=?",
                 (self._profile_id, module_id),
             ).fetchall()}
+        self._fill_walk()
 
+    def _fill_walk(self) -> None:
         items = self.query_one("#items", OptionList)
         items.clear_options()
         for it in self._items:
@@ -230,10 +299,17 @@ class InspectScreen(Screen):
         self._show_detail(0)
         items.focus()
 
-    def _render_walk_header(self) -> None:
+    def _list_title(self) -> str:
+        if self.list_key is not None:
+            row = self.app.con.execute(
+                "SELECT module_id, title FROM bank.qaqc_checklists WHERE key=?", (self.list_key,)).fetchone()
+            return f"{tracks.label(row['module_id'])} {row['title']}" if row else self.list_key
         topic = TOPICS.get(self.module_id, f"Module {self.module_id}")
+        return f"M{self.module_id:02d} {topic}"
+
+    def _render_walk_header(self) -> None:
         self.query_one("#subtitle", Static).update(
-            f"M{self.module_id:02d} {topic}   {len(self._ticked)}/{len(self._items)} ticked"
+            f"{self._list_title()}   {len(self._ticked)}/{len(self._items)} ticked"
         )
 
     def _item_line(self, it) -> Text:
@@ -244,7 +320,8 @@ class InspectScreen(Screen):
         text = it["text"]
         t.append(text[:room] + ("..." if len(text) > room else ""),
                  style=(theme.MUTED if ticked else theme.TEXT))
-        t.append(f"  p.{it['page']}", style=theme.MUTED)
+        if it["page"] is not None:
+            t.append(f"  p.{it['page']}", style=theme.MUTED)
         return t
 
     def _show_detail(self, ix: int) -> None:
@@ -256,6 +333,13 @@ class InspectScreen(Screen):
         t.append(it["lesson"] or "General", style=f"bold {theme.INFO}")
         t.append("\n")
         t.append(it["text"], style=theme.TEXT)
+        if it["page"] is None:          # QA/QC item: cite the public source it came from
+            meta = f"Source: {it['source_label']}"
+            meta += "   ticked" if it["cid"] in self._ticked else "   not ticked"
+            meta += f"\n{it['source_url']}"
+            t.append("\n" + meta, style=theme.MUTED)
+            self.query_one("#detail", Static).update(t)
+            return
         meta = f"p.{it['page']}"
         if it["cfr"]:
             meta += f"   29 CFR {it['cfr']}"
@@ -290,7 +374,10 @@ class InspectScreen(Screen):
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         if event.option_list.id == "modules" and event.option_id is not None:
-            self._open_walk(int(event.option_id))
+            if event.option_id.startswith("qaqc:"):
+                self._open_qaqc_walk(event.option_id.split(":", 1)[1])
+            else:
+                self._open_walk(int(event.option_id))
         elif event.option_list.id == "items":
             self._toggle_current()
 
@@ -322,9 +409,26 @@ class InspectScreen(Screen):
         if ix is None:
             return None
         opt = modules.get_option_at_index(ix)
-        return int(opt.id) if opt.id is not None else None
+        return int(opt.id) if opt.id is not None and not opt.id.startswith("qaqc:") else None
+
+    def _picked_qaqc_key(self) -> str | None:
+        if self.stage == "walk":
+            return self.list_key
+        modules = self.query_one("#modules", OptionList)
+        ix = modules.highlighted
+        if ix is None:
+            return None
+        opt = modules.get_option_at_index(ix)
+        return opt.id.split(":", 1)[1] if opt.id and opt.id.startswith("qaqc:") else None
 
     def action_export(self) -> None:
+        if self._qaqc:
+            key = self._picked_qaqc_key()
+            if key is None:
+                return
+            self.app.notify(f"Exporting QA/QC checklist {key}...")
+            self._export_worker(None, key)
+            return
         mid = self._picked_module_id()
         if mid is None:
             return
@@ -332,13 +436,16 @@ class InspectScreen(Screen):
         self._export_worker(mid)
 
     @work(thread=True)
-    def _export_worker(self, module_id: int) -> None:
+    def _export_worker(self, module_id: int | None, qaqc_key: str | None = None) -> None:
         from ... import db, paths
         from ...export import checklist as export_checklist
         out_dir = paths.ROOT / "exports"
         con = db.bank_connect(paths.BANK_DB)     # own connection: sqlite objects are per-thread
         try:
-            written = export_checklist.export_module(con, module_id, out_dir, pdf=True)
+            if qaqc_key is not None:
+                written = export_checklist.export_qaqc(con, qaqc_key, out_dir, pdf=True)
+            else:
+                written = export_checklist.export_module(con, module_id, out_dir, pdf=True)
         except Exception as exc:  # surface, never crash the UI thread
             self.app.call_from_thread(self.app.notify, f"Export failed: {exc}", severity="error")
             return
@@ -349,7 +456,26 @@ class InspectScreen(Screen):
 
     @work
     async def action_reset_module(self) -> None:
-        if self.stage != "walk" or self._profile_id is None or self.module_id is None:
+        if self.stage != "walk" or self._profile_id is None:
+            return
+        if self.list_key is not None:
+            confirmed = await self.app.push_screen_wait(
+                ConfirmModal(f"Clear every tick for {self._list_title()}?"))
+            if not confirmed:
+                return
+            con = self.app.con
+            con.execute(
+                "DELETE FROM checklist_ticks WHERE profile_id=? AND cid IN "
+                "(SELECT cid FROM bank.qaqc_checklist_items WHERE list_key=?)",
+                (self._profile_id, self.list_key),
+            )
+            con.commit()
+            keep = self.query_one("#items", OptionList).highlighted or 0
+            self._open_qaqc_walk(self.list_key)
+            self.query_one("#items", OptionList).highlighted = keep
+            self._show_detail(keep)
+            return
+        if self.module_id is None:
             return
         topic = TOPICS.get(self.module_id, f"Module {self.module_id}")
         confirmed = await self.app.push_screen_wait(
@@ -371,7 +497,10 @@ class InspectScreen(Screen):
 
     def action_back(self) -> None:
         if self.stage == "walk":
-            keep = self.module_id - 1 if self.module_id else 0
+            if self.list_key is not None:
+                keep = self._qaqc_keys.index(self.list_key) if self.list_key in self._qaqc_keys else 0
+            else:
+                keep = self.module_id - 1 if self.module_id else 0
             self._show_picker(keep=keep)
         else:
             self.app.pop_screen()

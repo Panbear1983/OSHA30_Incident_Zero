@@ -9,8 +9,7 @@ from textual.screen import Screen
 from textual.widgets import Static
 
 from .. import theme
-from ...game import mastery
-from ...content.segment import TITLES
+from ...game import mastery, tracks
 
 
 class StatsScreen(Screen):
@@ -96,6 +95,9 @@ class StatsScreen(Screen):
     def on_mount(self) -> None:
         con = self.app.con
         profile_id = self.app.state.profile_id
+        self.track = self.app.state.track
+        if self.track != "osha":
+            self.query_one("#stats-title", Static).update(f"STATS -- {tracks.NAMES[self.track]}")
 
         self._populate_mastery(con, profile_id)
         self._populate_overall_accuracy(con, profile_id)
@@ -112,7 +114,7 @@ class StatsScreen(Screen):
 
     def _populate_mastery(self, con, profile_id) -> None:
         container = self.query_one("#mastery-section", Vertical)
-        m = mastery.all_mastery(con, profile_id)
+        m = mastery.all_mastery(con, profile_id, self.track)
         if not m:
             container.mount(Static("No modules in bank yet.", classes="stat-line-muted"))
             return
@@ -120,8 +122,8 @@ class StatsScreen(Screen):
             container.mount(Static(self._mastery_row(module_id, m[module_id]), classes="stat-line"))
 
     def _mastery_row(self, module_id: int, pct: float) -> Text:
-        title = TITLES.get(module_id, f"Module {module_id}")
-        id_field = f"M{module_id:02d}"
+        title = tracks.title(module_id)
+        id_field = f"{tracks.label(module_id):<3}"
         title_field = title[:38].ljust(38)
         bar_len = max(0, min(10, round(pct / 10)))
         bar = theme.GLYPH["tile_small"] * bar_len
@@ -135,7 +137,8 @@ class StatsScreen(Screen):
 
     def _populate_overall_accuracy(self, con, profile_id) -> None:
         rows = con.execute(
-            "SELECT result, COUNT(*) FROM attempts WHERE profile_id=? GROUP BY result",
+            "SELECT result, COUNT(*) FROM attempts WHERE profile_id=? AND "
+            f"{tracks.attempt_qid_clause(self.track)} GROUP BY result",
             (profile_id,),
         ).fetchall()
         counts = {"hit": 0, "near_miss": 0, "incident": 0}
@@ -156,9 +159,9 @@ class StatsScreen(Screen):
         container = self.query_one("#category-section", Vertical)
         rows = con.execute(
             "SELECT q.category, a.result, COUNT(*) FROM attempts a "
-            "JOIN bank.questions q ON q.qid = a.qid WHERE a.profile_id=? "
+            "JOIN bank.questions q ON q.qid = a.qid WHERE a.profile_id=? AND q.track=? "
             "GROUP BY q.category, a.result",
-            (profile_id,),
+            (profile_id, self.track),
         ).fetchall()
         if not rows:
             container.mount(Static("No attempts recorded yet.", classes="stat-line-muted"))
@@ -194,7 +197,8 @@ class StatsScreen(Screen):
         container = self.query_one("#shifts-section", Vertical)
         rows = con.execute(
             "SELECT started_at, outcome, score, correct, incidents FROM shifts "
-            "WHERE profile_id=? ORDER BY started_at DESC LIMIT 10",
+            f"WHERE profile_id=? AND {tracks.shift_module_clause(self.track)} "
+            "ORDER BY started_at DESC LIMIT 10",
             (profile_id,),
         ).fetchall()
         if not rows:
@@ -218,6 +222,10 @@ class StatsScreen(Screen):
 
     def _populate_exams(self, con, profile_id) -> None:
         container = self.query_one("#exams-section", Vertical)
+        if self.track != "osha":
+            container.mount(Static("The mock exam is OSHA 30 only; QA/QC has no exam.",
+                                   classes="stat-line-muted"))
+            return
         rows = con.execute(
             "SELECT at, total, correct, passed FROM exams "
             "WHERE profile_id=? ORDER BY at DESC LIMIT 5",
@@ -240,6 +248,9 @@ class StatsScreen(Screen):
 
     def _populate_interview(self, con, profile_id) -> None:
         container = self.query_one("#interview-section", Vertical)
+        if self.track != "osha":
+            container.mount(Static("Interview scenarios are OSHA 30 only.", classes="stat-line-muted"))
+            return
         row = con.execute(
             "SELECT COUNT(*), AVG(rating) FROM interview_ratings WHERE profile_id=?", (profile_id,)
         ).fetchone()

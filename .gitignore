@@ -16,6 +16,7 @@ data/*.db-wal
 data/*.db-shm
 data/*.db.new
 data/cache/
+data/backups/
 exports/
 
 # --- Earlier hand-built prototype from a different session (kept locally, not published:

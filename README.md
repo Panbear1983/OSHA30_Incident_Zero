@@ -21,6 +21,46 @@ The four doors never overlap: Train is closed questions with one right answer,
 Interview is open questions where the point is how you explain; Look Up is search,
 Inspect is a fixed walk through one module.
 
+## Two tracks: OSHA 30 and QA/QC
+
+Press **k** on the dashboard to switch track. The OSHA 30 track is everything described
+below. The **QA/QC track** is a separate study track for a QA/QC assistant on a
+construction site (power and fiber cable pulling, network cabling, CCTV, monitoring
+systems). It has its own six modules (shown as Q1-Q6), its own questions, glossary and
+checklists, and its own streak and mastery. It never touches the OSHA side: QA/QC
+questions cannot enter the OSHA mock exam, OSHA mastery, the OSHA streak or the OSHA stats.
+
+| Module | Topic |
+|--------|-------|
+| Q1 | QA/QC fundamentals and documentation (ITP, hold/witness points, NCR, RFI, submittals) |
+| Q2 | Copper structured cabling and CCTV (permanent link vs channel, certification, labeling) |
+| Q3 | Fiber optics (Tier 1 / Tier 2 testing, loss budgets, end-face inspection, polarity) |
+| Q4 | Power cable pulling and testing (tension, sidewall pressure, bend radius, insulation resistance) |
+| Q5 | Electrical safety, FMCS and tools (arc flash boundaries, LOTO, aerial lifts) |
+| Q6 | Site readiness (cleanroom gowning, heat illness, onboarding) |
+
+Instead of the study guide, the QA/QC track is grounded on a fixed list of free public web
+pages and PDFs (`osha_game/content/qaqc_sources.py`). Every question, glossary term, key
+number and checklist item cites its page by name and URL. A generated question is accepted
+only if its supporting quote is found word for word in the downloaded text of that page and
+the quote supports the answer; the 29 seed questions from the pre-start program are kept
+even when their page cannot be downloaded, and the build lists them. Look Up has an English /
+繁體中文 glossary (search either language) and a key-numbers table. Inspect has five QA/QC
+checklists (cable pull, cable reel receiving, fiber Tier 1 test, Cat6 certification, NCR
+close-out) with the same Word / PDF export.
+
+```bash
+./dashboard.sh qaqc fetch        # download the source pages into data/cache/ (git-ignored)
+./dashboard.sh qaqc build        # back up bank.db + progress.db, then (re)build the track
+./dashboard.sh qaqc status       # questions per module, glossary, checklists
+./dashboard.sh lookup 上鎖掛籤
+./dashboard.sh lookup --track qaqc "permanent link"
+./dashboard.sh export --checklist cable_pull      # or --qaqc for all five
+```
+
+The downloaded source text is third-party material and is never committed; only the
+built bank (with the short supporting quotes) is.
+
 ## Screens
 
 | | |

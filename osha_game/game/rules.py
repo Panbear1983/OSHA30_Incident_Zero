@@ -22,6 +22,26 @@ def _norm(s: str) -> str:
     return " ".join((s or "").strip().lower().split())
 
 
+def _col(row, name: str):
+    """Column value, or None on a row from a bank that predates the column."""
+    try:
+        return row[name]
+    except (IndexError, KeyError):
+        return None
+
+
+def track_streak(con, profile_id: int, track: str) -> dict:
+    """{days_without_incident, best_streak, lifetime_score} for a non-OSHA track (zeros if
+    the profile has never finished a shift on it). OSHA's live in `profiles`."""
+    row = con.execute(
+        "SELECT days_without_incident, best_streak, lifetime_score FROM track_streaks "
+        "WHERE profile_id=? AND track=?", (profile_id, track),
+    ).fetchone()
+    if row is None:
+        return {"days_without_incident": 0, "best_streak": 0, "lifetime_score": 0}
+    return dict(row)
+
+
 class Outcome:
     def __init__(self, result: str, correct: bool, score_delta: int, incident: dict | None = None):
         self.result = result
@@ -31,11 +51,13 @@ class Outcome:
 
 
 class Shift:
-    def __init__(self, con, profile_id: int, module_id: int | None, size: int = 15):
+    def __init__(self, con, profile_id: int, module_id: int | None, size: int = 15,
+                 track: str = "osha"):
         self.con = con
         self.profile_id = profile_id
         self.module_id = module_id
-        self.questions = compose.shift_questions(con, profile_id, module_id, size)
+        self.track = track
+        self.questions = compose.shift_questions(con, profile_id, module_id, size, track=track)
         self.index = 0
         self.score = 0
         self.correct_count = 0
@@ -92,6 +114,7 @@ class Shift:
                 "correct": q["correct"], "explanation": q["explanation"],
                 "cfr": q["cfr"], "page": q["page"], "source_quote": q["source_quote"],
                 "category": q["category"],
+                "source_label": _col(q, "source_label"), "source_url": _col(q, "source_url"),
             }
             self.incidents.append(report)
             self._record_attempt(q, chosen, "incident", bet, ms)
@@ -117,19 +140,33 @@ class Shift:
             (datetime.now(timezone.utc).isoformat(), self.correct_count, self.near_miss_count,
              self.incident_count, self.score, outcome, self.shift_id),
         )
-        row = self.con.execute(
-            "SELECT days_without_incident, best_streak FROM profiles WHERE id=?", (self.profile_id,)
-        ).fetchone()
-        new_streak = row["days_without_incident"] + 1 if outcome == "clean" else 0
-        best = max(row["best_streak"], new_streak)
-        self.con.execute(
-            "UPDATE profiles SET days_without_incident=?, best_streak=?, "
-            "lifetime_score=lifetime_score+?, last_seen_at=? WHERE id=?",
-            (new_streak, best, self.score, datetime.now(timezone.utc).isoformat(), self.profile_id),
-        )
+        if self.track == "osha":
+            row = self.con.execute(
+                "SELECT days_without_incident, best_streak FROM profiles WHERE id=?", (self.profile_id,)
+            ).fetchone()
+            new_streak = row["days_without_incident"] + 1 if outcome == "clean" else 0
+            best = max(row["best_streak"], new_streak)
+            self.con.execute(
+                "UPDATE profiles SET days_without_incident=?, best_streak=?, "
+                "lifetime_score=lifetime_score+?, last_seen_at=? WHERE id=?",
+                (new_streak, best, self.score, datetime.now(timezone.utc).isoformat(), self.profile_id),
+            )
+        else:
+            # Any other track keeps its own streak; the OSHA numbers in `profiles` are not touched.
+            row = track_streak(self.con, self.profile_id, self.track)
+            new_streak = row["days_without_incident"] + 1 if outcome == "clean" else 0
+            best = max(row["best_streak"], new_streak)
+            self.con.execute(
+                "INSERT INTO track_streaks (profile_id, track, days_without_incident, best_streak, "
+                " lifetime_score) VALUES (?,?,?,?,?) ON CONFLICT(profile_id, track) DO UPDATE SET "
+                " days_without_incident=excluded.days_without_incident, best_streak=excluded.best_streak, "
+                " lifetime_score=track_streaks.lifetime_score+?",
+                (self.profile_id, self.track, new_streak, best, self.score, self.score),
+            )
         self.con.commit()
         return {
             "outcome": outcome, "score": self.score, "streak": new_streak, "best_streak": best,
+            "track": self.track,
             "correct": self.correct_count, "near_misses": self.near_miss_count,
             "incidents": self.incident_count, "incident_reports": self.incidents,
             "near_miss_log": self.near_misses,

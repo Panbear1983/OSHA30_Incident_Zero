@@ -64,12 +64,40 @@ def retrievability(con, profile_id: int, qid: str) -> float:
     return _scheduler.get_card_retrievability(Card.from_json(row["card_json"]))
 
 
-def due_qids(con, profile_id: int, limit: int = 8) -> list[str]:
-    rows = con.execute(
-        "SELECT qid FROM srs WHERE profile_id=? AND due<=? ORDER BY due LIMIT ?",
-        (profile_id, datetime.now(timezone.utc).isoformat(), limit),
-    ).fetchall()
+def _track_clause(track: str) -> tuple[str, tuple]:
+    """SQL filter on srs.qid for one track. OSHA keeps cards whose question has left the bank
+    (exactly the pre-QA/QC behaviour); any other track counts only its own questions."""
+    if track == "osha":
+        return " AND qid NOT IN (SELECT qid FROM bank.questions WHERE track <> 'osha')", ()
+    return " AND qid IN (SELECT qid FROM bank.questions WHERE track = ?)", (track,)
+
+
+def due_qids(con, profile_id: int, limit: int = 8, track: str | None = None) -> list[str]:
+    """Due cards, earliest first. With `track`, cards belonging to another track's questions
+    are left out before the limit is applied, so a QA/QC review can never take an OSHA
+    shift's slot (or the other way round)."""
+    now = datetime.now(timezone.utc).isoformat()
+    if track is None:
+        rows = con.execute(
+            "SELECT qid FROM srs WHERE profile_id=? AND due<=? ORDER BY due LIMIT ?",
+            (profile_id, now, limit),
+        ).fetchall()
+    else:
+        clause, extra = _track_clause(track)
+        rows = con.execute(
+            f"SELECT qid FROM srs WHERE profile_id=? AND due<=?{clause} ORDER BY due LIMIT ?",
+            (profile_id, now, *extra, limit),
+        ).fetchall()
     return [r["qid"] for r in rows]
+
+
+def due_count(con, profile_id: int, track: str = "osha") -> int:
+    """How many cards of this track are due now."""
+    clause, extra = _track_clause(track)
+    return con.execute(
+        f"SELECT COUNT(*) FROM srs WHERE profile_id=? AND due<=?{clause}",
+        (profile_id, datetime.now(timezone.utc).isoformat(), *extra),
+    ).fetchone()[0]
 
 
 def attempted_qids(con, profile_id: int) -> set[str]:

@@ -6,7 +6,9 @@ sentence names one. PDF conversion goes through LibreOffice when it is installed
 file is always written. No names, no profile data, nothing personal ends up in the file.
 
   CLI:    ./dashboard.sh export [--module N | --all] [--no-pdf] [--out DIR]
+          ./dashboard.sh export --checklist cable_pull | --qaqc     (QA/QC track lists)
   Screen: export_module(con, module_id, out_dir, pdf=True) -> list[Path]
+          export_qaqc(con, key, out_dir, pdf=True) -> list[Path]
 """
 import os
 import re
@@ -180,9 +182,126 @@ def export_all(con, out_dir: Path, pdf: bool = True) -> list[Path]:
     return written
 
 
+# -- QA/QC track checklists (separate lists, cited to public web sources, not to the guide) --
+
+QAQC_SUBTITLE = "QA/QC pre-start program - inspection checklist"
+QAQC_FOOTER = ("Generic checklist built from public reference material; it does not replace the "
+               "project specification, the approved ITP, or the manufacturer's instructions.")
+
+
+def qaqc_keys(con) -> list[str]:
+    s = _schema_prefix(con)
+    try:
+        return [r[0] for r in con.execute(f"SELECT key FROM {s}qaqc_checklists ORDER BY seq").fetchall()]
+    except Exception:
+        return []
+
+
+def _qaqc_list(con, key: str):
+    s = _schema_prefix(con)
+    head = con.execute(f"SELECT key, module_id, title, intro FROM {s}qaqc_checklists WHERE key=?",
+                       (key,)).fetchone()
+    if head is None:
+        return None, []
+    items = con.execute(
+        f"SELECT seq, section, text, source_url, source_label FROM {s}qaqc_checklist_items "
+        f"WHERE list_key=? ORDER BY seq", (key,)).fetchall()
+    return head, items
+
+
+def qaqc_file_stem(key: str, title: str) -> str:
+    safe = re.sub(r"[^A-Za-z0-9]+", "_", title).strip("_")
+    return f"QAQC_{safe}_Checklist"
+
+
+def _write_qaqc_docx(head, items: list, out_path: Path) -> None:
+    from docx import Document
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.shared import Pt, Inches
+
+    doc = Document()
+    for section in doc.sections:
+        section.left_margin = Inches(0.8)
+        section.right_margin = Inches(0.8)
+        section.top_margin = Inches(0.8)
+        section.bottom_margin = Inches(0.8)
+
+    doc.add_heading(head["title"], level=0)
+    sub = doc.add_paragraph(f"{QAQC_SUBTITLE} (module Q{head['module_id'] - 100})")
+    sub.runs[0].italic = True
+    doc.add_paragraph(head["intro"])
+    doc.add_paragraph("Location / area: ____________________   Cable or test ID: ____________________")
+
+    sources: dict[str, str] = {}
+    current = object()
+    table = None
+    for it in items:
+        if it["section"] != current:
+            current = it["section"]
+            doc.add_heading(current, level=2)
+            table = doc.add_table(rows=0, cols=3)
+            table.style = "Table Grid"
+            table.autofit = False
+            # LibreOffice sizes columns from the table grid, not from the cell widths
+            for col, w in zip(table.columns, (0.45, 5.5, 0.95)):
+                col.width = Inches(w)
+        n = sources.setdefault(it["source_url"], str(len(sources) + 1))
+        row = table.add_row().cells
+        row[0].width = Inches(0.45)
+        row[1].width = Inches(5.5)
+        row[2].width = Inches(0.95)
+        row[0].text = "[ ]"
+        row[1].text = it["text"]
+        row[2].text = f"src {n}"
+        for cell in row:
+            for para in cell.paragraphs:
+                for run in para.runs:
+                    run.font.size = Pt(9.5)
+        row[2].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+
+    doc.add_paragraph()
+    doc.add_paragraph("Inspected by: ____________________   Date: ____________   "
+                      "Result:  [ ] Accept   [ ] Reject / NCR no. __________")
+    doc.add_heading("Sources", level=2)
+    labels = {it["source_url"]: it["source_label"] for it in items}
+    for url, n in sources.items():
+        p = doc.add_paragraph(f"src {n}: {labels[url]} - {url}")
+        p.runs[0].font.size = Pt(8.5)
+    foot = doc.add_paragraph(QAQC_FOOTER)
+    foot.runs[0].font.size = Pt(8)
+    foot.runs[0].italic = True
+    doc.save(str(out_path))
+
+
+def export_qaqc(con, key: str, out_dir: Path, pdf: bool = True) -> list[Path]:
+    """Write one QA/QC checklist as Word (and PDF when LibreOffice is available)."""
+    head, items = _qaqc_list(con, key)
+    if head is None or not items:
+        raise ValueError(f"no QA/QC checklist {key!r} (known: {', '.join(qaqc_keys(con)) or 'none'})")
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    docx_path = out_dir / (qaqc_file_stem(key, head["title"]) + ".docx")
+    _write_qaqc_docx(head, items, docx_path)
+    written = [docx_path]
+    if pdf:
+        pdf_path = _to_pdf(docx_path, out_dir)
+        if pdf_path is not None:
+            written.append(pdf_path)
+    return written
+
+
+def export_qaqc_all(con, out_dir: Path, pdf: bool = True) -> list[Path]:
+    written: list[Path] = []
+    for key in qaqc_keys(con):
+        written.extend(export_qaqc(con, key, out_dir, pdf=pdf))
+    return written
+
+
 def main(argv: list[str]) -> int:
     module_id: int | None = None
     want_all = False
+    qaqc_key: str | None = None
+    want_qaqc = False
     pdf = True
     out_dir = paths.ROOT / "exports"
     i = 0
@@ -192,6 +311,10 @@ def main(argv: list[str]) -> int:
             module_id = int(argv[i + 1]); i += 2; continue
         if a in ("--all", "-a"):
             want_all = True; i += 1; continue
+        if a in ("--checklist", "-c") and i + 1 < len(argv):
+            qaqc_key = argv[i + 1]; i += 2; continue
+        if a == "--qaqc":
+            want_qaqc = True; i += 1; continue
         if a == "--no-pdf":
             pdf = False; i += 1; continue
         if a in ("--out", "-o") and i + 1 < len(argv):
@@ -199,7 +322,7 @@ def main(argv: list[str]) -> int:
         if a in ("-h", "--help"):
             print(__doc__); return 0
         print(f"unknown argument: {a}"); return 2
-    if module_id is None:
+    if module_id is None and qaqc_key is None and not want_qaqc:
         want_all = True
 
     if not paths.BANK_DB.exists():
@@ -207,14 +330,23 @@ def main(argv: list[str]) -> int:
         return 1
     con = db.bank_connect(paths.BANK_DB)
     try:
-        if not has_checklists(con):
+        if qaqc_key is not None or want_qaqc:
+            if not qaqc_keys(con):
+                print("This bank has no QA/QC checklists -- run './dashboard.sh qaqc build'.")
+                return 1
+        elif not has_checklists(con):
             print("This bank has no checklists -- run './dashboard.sh build' to add them.")
             return 1
         if pdf and soffice_path() is None:
             print("LibreOffice not found: writing Word files only.")
             pdf = False
         try:
-            written = export_all(con, out_dir, pdf) if want_all else export_module(con, module_id, out_dir, pdf)
+            if qaqc_key is not None:
+                written = export_qaqc(con, qaqc_key, out_dir, pdf)
+            elif want_qaqc:
+                written = export_qaqc_all(con, out_dir, pdf)
+            else:
+                written = export_all(con, out_dir, pdf) if want_all else export_module(con, module_id, out_dir, pdf)
         except ValueError as exc:
             print(exc); return 1
     finally:

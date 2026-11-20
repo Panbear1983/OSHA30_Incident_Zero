@@ -140,7 +140,8 @@ class DebriefScreen(Screen):
 
             with Vertical(id="streak-block"):
                 yield Digits(str(self.summary.get("streak", 0)), id="streak-digits")
-                yield Static("DAYS WITHOUT INCIDENT", id="streak-label")
+                yield Static("DAYS WITHOUT INCIDENT" if self.summary.get("track", "osha") == "osha"
+                             else "QA/QC DAYS WITHOUT INCIDENT", id="streak-label")
                 yield Static(f"(best: {self.summary.get('best_streak', 0)})", id="streak-best")
 
             for report in self.summary.get("incident_reports", []):
@@ -187,6 +188,10 @@ class DebriefScreen(Screen):
             citation_parts.append(str(cfr))
         if page:
             citation_parts.append(f"Study Guide p. {page}")
+        if report.get("source_label"):
+            citation_parts.append(f"Source: {report['source_label']}")
+        if report.get("source_url"):
+            citation_parts.append(report["source_url"])
         if citation_parts:
             children.append(Static("  ".join(citation_parts), classes="incident-citation"))
 

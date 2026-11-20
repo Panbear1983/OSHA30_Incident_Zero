@@ -10,8 +10,9 @@ from . import mastery
 from .. import srs as srsmod
 
 
-def _bank_rows(con) -> dict[str, "sqlite3.Row"]:
-    return {r["qid"]: r for r in con.execute("SELECT * FROM bank.questions").fetchall()}
+def _bank_rows(con, track: str = "osha") -> dict[str, "sqlite3.Row"]:
+    return {r["qid"]: r for r in con.execute(
+        "SELECT * FROM bank.questions WHERE track=?", (track,)).fetchall()}
 
 
 def _take(pool: list, seen: set, chosen: list, need: int) -> None:
@@ -26,10 +27,13 @@ def _take(pool: list, seen: set, chosen: list, need: int) -> None:
         need -= 1
 
 
-def shift_questions(con, profile_id: int, module_id: int | None, size: int = 15) -> list:
-    all_rows = _bank_rows(con)
+def shift_questions(con, profile_id: int, module_id: int | None, size: int = 15,
+                    track: str = "osha") -> list:
+    """Same priority rules for every track (FSRS-due, then new in the module, then new
+    anywhere, then not-yet-due), but only ever drawn from `track`'s questions."""
+    all_rows = _bank_rows(con, track)
     attempted = srsmod.attempted_qids(con, profile_id)
-    due = [q for q in srsmod.due_qids(con, profile_id, limit=size) if q in all_rows]
+    due = [q for q in srsmod.due_qids(con, profile_id, limit=size, track=track) if q in all_rows]
 
     chosen: list = []
     seen: set = set()
@@ -51,8 +55,10 @@ def shift_questions(con, profile_id: int, module_id: int | None, size: int = 15)
 
 
 def exam_questions(con, unlocked_module_ids: list[int], size: int = 30) -> list:
-    """Stratified across unlocked modules via round-robin, so no module dominates."""
-    all_rows = [r for r in con.execute("SELECT * FROM bank.questions").fetchall()
+    """Stratified across unlocked modules via round-robin, so no module dominates.
+    The mock exam is the OSHA 30 exam: only OSHA-track questions can ever be drawn."""
+    all_rows = [r for r in con.execute(
+                    "SELECT * FROM bank.questions WHERE track='osha'").fetchall()
                 if r["module_id"] in unlocked_module_ids]
     by_mod: dict[int, list] = {}
     for r in all_rows:

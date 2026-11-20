@@ -11,11 +11,16 @@ usage() {
   cat <<'USAGE'
 INCIDENT ZERO — OSHA 30 dashboard
 
-  ./dashboard.sh                 open the dashboard (Train / Look Up / Inspect / Interview)
-  ./dashboard.sh lookup WORDS    find a rule, number, standard, or term (+ page) from the terminal
+  ./dashboard.sh                 open the dashboard (Train / Look Up / Inspect / Interview);
+                                 press k on the dashboard to switch track: OSHA 30 or QA/QC
+  ./dashboard.sh lookup WORDS    find a rule, number, standard, or term (+ page or source);
+                                 --track osha|qaqc|all, Chinese works: lookup 上鎖掛籤
   ./dashboard.sh build           extract PDFs + build the question bank and fact base
-  ./dashboard.sh export [--module N | --all] [--no-pdf]
+  ./dashboard.sh export [--module N | --all | --checklist KEY | --qaqc] [--no-pdf]
                                  write Inspect checklists to exports/ as Word (+ PDF)
+  ./dashboard.sh qaqc [fetch | build | status]
+                                 the QA/QC track: fetch its source pages, (re)build it into
+                                 bank.db (backs up bank.db + progress.db first), show counts
   ./dashboard.sh ai [--module N] [--force]
                                  optional: Ollama-written interview scenarios (build-time only)
   ./dashboard.sh reset NAME      wipe one profile (asks for confirmation)
@@ -54,6 +59,7 @@ case "$cmd" in
   build)          exec "$VENV/bin/python" -m osha_game build "$@" ;;
   lookup|find)    exec "$VENV/bin/python" -m osha_game lookup "$@" ;;
   export)         exec "$VENV/bin/python" -m osha_game export "$@" ;;
+  qaqc)           exec "$VENV/bin/python" -m osha_game qaqc "$@" ;;
   ai)             exec "$VENV/bin/python" -m osha_game ai "$@" ;;
   reset)          exec "$VENV/bin/python" -m osha_game reset "$@" ;;
   status|doctor)  exec "$VENV/bin/python" -m osha_game status "$@" ;;
